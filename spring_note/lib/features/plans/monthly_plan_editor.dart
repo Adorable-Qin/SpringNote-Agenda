@@ -124,8 +124,6 @@ class _MonthlyPlanEditorState extends State<MonthlyPlanEditor> {
 
   Widget _section(String key, String title, TextEditingController controller) {
     final colors = AppTheme.colors(context);
-    final planning = key == 'monthly-plan';
-    final accent = Theme.of(context).colorScheme.primary;
     return Container(
       key: ValueKey(key),
       padding: const EdgeInsets.all(16),
@@ -137,36 +135,15 @@ class _MonthlyPlanEditorState extends State<MonthlyPlanEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: planning
-                      ? accent.withValues(alpha: 0.10)
-                      : colors.surfaceMuted,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  planning ? Icons.flag_outlined : Icons.fact_check_outlined,
-                  size: 19,
-                  color: planning ? accent : colors.textMuted,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: colors.text,
-                    height: 1.4,
-                    decoration: TextDecoration.none,
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: colors.text,
+              height: 1.4,
+              decoration: TextDecoration.none,
+            ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
