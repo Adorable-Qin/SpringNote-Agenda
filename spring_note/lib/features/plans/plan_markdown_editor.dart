@@ -29,6 +29,7 @@ class PlanMarkdownEditor extends StatefulWidget {
 class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
   final _input = _PlanBlockController();
   final _focus = FocusNode();
+  final _activeBlockKey = GlobalKey();
   final _undo = <String>[];
   final _redo = <String>[];
   int? _start;
@@ -148,7 +149,8 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
         _edit('');
         return;
       }
-      final replacement = '$_prefix$value$nextPrefix';
+      final separator = nextPrefix.isEmpty ? '\n\n' : '\n';
+      final replacement = '$_prefix$oldBody$separator$nextPrefix';
       final next = widget.controller.text.replaceRange(
         _start!,
         _end,
@@ -303,20 +305,25 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
     final task = block.isTask;
     Widget child;
     if (active) {
-      child = TextField(
-        key: const ValueKey('plan-active-block'),
-        controller: _input,
-        focusNode: _focus,
-        maxLines: null,
-        minLines: 1,
-        style: _editStyle(context),
-        keyboardType: TextInputType.multiline,
-        decoration: const InputDecoration(
-          border: InputBorder.none,
-          isDense: true,
-          contentPadding: EdgeInsets.symmetric(vertical: 4),
+      // Preserve the platform input connection when moving to another block or
+      // changing between a task row and a plain paragraph.
+      child = KeyedSubtree(
+        key: _activeBlockKey,
+        child: TextField(
+          key: const ValueKey('plan-active-block'),
+          controller: _input,
+          focusNode: _focus,
+          maxLines: null,
+          minLines: 1,
+          style: _editStyle(context),
+          keyboardType: TextInputType.multiline,
+          decoration: const InputDecoration(
+            border: InputBorder.none,
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(vertical: 4),
+          ),
+          onChanged: _typed,
         ),
-        onChanged: _typed,
       );
       if (!task && RegExp(r'^ {0,3}(?:[-+*]|\d+[.)]) ').hasMatch(_prefix)) {
         child = Row(

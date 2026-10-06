@@ -1,5 +1,6 @@
 import 'package:path/path.dart' as p;
 import 'plan_markdown_editor.dart';
+import 'monthly_plan_editor.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -454,12 +455,20 @@ class _PlanCardState extends State<_PlanCard>
             ],
           ),
           const SizedBox(height: 12),
-          PlanMarkdownEditor(
-            controller: _controller,
-            onChanged: _save,
-            imageBasePath: p.dirname(widget.note.path),
-            english: widget.english,
-          ),
+          if (widget.note.kind == NoteKind.monthlyPlan)
+            MonthlyPlanEditor(
+              controller: _controller,
+              onChanged: _save,
+              imageBasePath: p.dirname(widget.note.path),
+              english: widget.english,
+            )
+          else
+            PlanMarkdownEditor(
+              controller: _controller,
+              onChanged: _save,
+              imageBasePath: p.dirname(widget.note.path),
+              english: widget.english,
+            ),
           if (_error != null)
             Row(
               children: [
