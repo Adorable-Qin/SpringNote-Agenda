@@ -58,11 +58,11 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, '删除'));
       await tester.pumpAndSettle();
       expect(service.contents, isEmpty);
-      await tester.tap(find.byIcon(Icons.more_horiz));
+      await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('周报').last);
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.more_horiz));
+      await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('日报').last);
       await tester.pumpAndSettle();
@@ -90,14 +90,14 @@ void main() {
       );
       await tester.pumpWidget(app(WorkReportCycle.weekly));
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.more_horiz));
+      await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
       await tester.pumpAndSettle();
       expect(find.text('双周报'), findsNothing);
       await tester.tap(find.text('日报').last);
       await tester.pumpAndSettle();
       await tester.pumpWidget(app(WorkReportCycle.biweekly));
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.more_horiz));
+      await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('双周报'));
       await tester.pumpAndSettle();
@@ -538,7 +538,7 @@ final value = 1;
     expect(find.text('日报命中'), findsOneWidget);
     expect(find.text('周报命中'), findsNothing);
 
-    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('周报').last);
     await tester.pump();
@@ -696,7 +696,8 @@ final value = 1;
     );
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.more_horiz));
+    expect(find.byIcon(Icons.more_horiz), findsNothing);
+    await tester.tap(find.widgetWithText(TextButton, '日报'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('周报').last);
     await tester.pump();
@@ -735,13 +736,13 @@ final value = 1;
     await tester.enterText(editor, '# 日报\n编辑内容');
     await tester.pump(const Duration(milliseconds: 600));
 
-    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('周报').last);
     await tester.pumpAndSettle();
     expect(_editableRealText(tester), '# 周报\n');
 
-    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('月报').last);
     await tester.pumpAndSettle();

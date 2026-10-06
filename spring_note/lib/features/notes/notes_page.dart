@@ -20,7 +20,6 @@ import '../../core/services/note_upload_queue.dart';
 import '../../core/services/pasted_image_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/markdown_editor_highlight.dart';
-import '../../core/widgets/page_scaffold.dart';
 import '../../l10n/l10n.dart';
 import 'markdown_preview.dart';
 import 'weekly_report_picker.dart';
@@ -1888,18 +1887,6 @@ class _NotesSidebar extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: colors.surfaceMuted,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  noteKindLabel(context, kind),
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-              const Spacer(),
               _NotesKindMenuButton(
                 kind: kind,
                 onKindChanged: onKindChanged,
@@ -2136,8 +2123,8 @@ class _NotesKindMenuButtonState extends State<_NotesKindMenuButton> {
           CompositedTransformFollower(
             link: _layerLink,
             showWhenUnlinked: false,
-            targetAnchor: Alignment.bottomRight,
-            followerAnchor: Alignment.topRight,
+            targetAnchor: Alignment.bottomLeft,
+            followerAnchor: Alignment.topLeft,
             offset: const Offset(0, 6),
             child: _NotesKindMenuTransition(
               child: _NotesKindMenu(
@@ -2178,9 +2165,30 @@ class _NotesKindMenuButtonState extends State<_NotesKindMenuButton> {
       child: Semantics(
         label: l10n(context).notesSwitchKindSemantics,
         button: true,
-        child: SpringNoteIconButton(
-          icon: Icons.more_horiz,
+        child: TextButton(
+          key: const ValueKey('note-kind-selector'),
+          style: TextButton.styleFrom(
+            backgroundColor: AppTheme.colors(context).surfaceMuted,
+            foregroundColor: AppTheme.colors(context).text,
+            textStyle: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(decoration: TextDecoration.none),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            minimumSize: const Size(0, 28),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
           onPressed: _toggleOverlay,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(noteKindLabel(context, widget.kind)),
+              const SizedBox(width: 2),
+              Icon(_open ? Icons.expand_less : Icons.expand_more, size: 16),
+            ],
+          ),
         ),
       ),
     );

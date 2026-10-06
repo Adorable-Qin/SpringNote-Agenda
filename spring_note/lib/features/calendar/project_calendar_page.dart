@@ -106,6 +106,9 @@ class _ProjectCalendarPageState extends State<ProjectCalendarPage> {
       title: strings.title,
       actions: [
         TextButton.icon(
+          style: TextButton.styleFrom(
+            textStyle: const TextStyle(decoration: TextDecoration.none),
+          ),
           onPressed: _showToday,
           icon: const Icon(Icons.today_outlined, size: 17),
           label: Text(strings.today),
