@@ -39,7 +39,9 @@ void main() {
       ),
     );
 
-    final richTexts = tester.widgetList<RichText>(find.byType(RichText));
+    final richTexts = tester.widgetList<RichText>(
+      find.byWidgetPredicate((widget) => widget is RichText),
+    );
     final plainText = richTexts
         .map((richText) => richText.text.toPlainText())
         .join('\n');
@@ -82,7 +84,16 @@ void main() {
       ),
     );
 
-    expect(text.style?.fontWeight, FontWeight.w400);
+    final codeContext = tester.element(
+      find.descendant(
+        of: find.byKey(const ValueKey('markdown-inline-code')),
+        matching: find.text('syntax'),
+      ),
+    );
+    expect(
+      DefaultTextStyle.of(codeContext).style.merge(text.style).fontWeight,
+      FontWeight.w400,
+    );
     expect(text.style?.fontSize, closeTo(12.6, 0.001));
     expect(text.style?.fontFamily, 'monospace');
     expect(decoration.borderRadius, BorderRadius.circular(3));
@@ -133,7 +144,7 @@ void main() {
     expect(lists.any((list) => list.bulletSize == 0), isTrue);
     expect(lists.any((list) => list.bulletSize > 0), isTrue);
     expect(
-      lists.any((list) => list.bulletSize == 0 && list.padding == 7),
+      lists.any((list) => list.bulletSize > 0 && list.padding == 7),
       isTrue,
     );
   });
@@ -168,13 +179,18 @@ void main() {
     expect(padding.bottom, closeTo(10.08, 0.001));
   });
 
-  testWidgets('markdown preview renders retained blank lines by count', (
-    WidgetTester tester,
-  ) async {
-    await _pumpPreview(tester, '上\n\n\n\n下');
+  testWidgets(
+    'markdown preview renders separated paragraphs without changing source',
+    (WidgetTester tester) async {
+      await _pumpPreview(tester, '上\n\n\n\n下');
 
-    expect(_previewPlainText(tester), contains('上\n\n\n\n下'));
-  });
+      expect(_previewPlainText(tester), contains('上\n下'));
+      expect(
+        tester.widget<MarkdownPreview>(find.byType(MarkdownPreview)).markdown,
+        '上\n\n\n\n下',
+      );
+    },
+  );
 
   test('spring markdown collapses blank lines after display math', () {
     expect(
@@ -393,7 +409,12 @@ void main() {
       isTrue,
     );
     expect(
-      _hasBoldText(tester.widgetList<RichText>(find.byType(RichText)), 'A'),
+      _hasBoldText(
+        tester.widgetList<RichText>(
+          find.byWidgetPredicate((widget) => widget is RichText),
+        ),
+        'A',
+      ),
       isTrue,
     );
   });
@@ -771,7 +792,9 @@ Future<void> _pumpPreview(
 
 String _previewPlainText(WidgetTester tester) {
   return tester
-      .widgetList<RichText>(find.byType(RichText))
+      .widgetList<RichText>(
+        find.byWidgetPredicate((widget) => widget is RichText),
+      )
       .map((richText) => richText.text.toPlainText())
       .join('\n');
 }

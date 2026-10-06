@@ -271,6 +271,8 @@ void main() {
     expect(find.text('周计划板'), findsOneWidget);
     expect(find.text('2026-10'), findsOneWidget);
     expect(find.text('2026-09'), findsOneWidget);
+    await tester.tap(find.text('Weekly task', findRichText: true).first);
+    await tester.pumpAndSettle();
     final weeklyEditor = find.byWidgetPredicate(
       (widget) =>
           widget is TextField &&

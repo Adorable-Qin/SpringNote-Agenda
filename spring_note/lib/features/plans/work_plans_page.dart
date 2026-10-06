@@ -1,3 +1,5 @@
+import 'package:path/path.dart' as p;
+import 'plan_markdown_editor.dart';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -452,18 +454,11 @@ class _PlanCardState extends State<_PlanCard>
             ],
           ),
           const SizedBox(height: 12),
-          TextField(
+          PlanMarkdownEditor(
             controller: _controller,
-            minLines: widget.pinned ? 16 : 9,
-            maxLines: null,
-            keyboardType: TextInputType.multiline,
             onChanged: _save,
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              hintText: widget.english
-                  ? '- [ ] Task — Due: 2026-10-09'
-                  : '- [ ] 完成方案，截止：2026-10-09',
-            ),
+            imageBasePath: p.dirname(widget.note.path),
+            english: widget.english,
           ),
           if (_error != null)
             Row(

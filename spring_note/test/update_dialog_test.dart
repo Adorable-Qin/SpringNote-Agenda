@@ -39,7 +39,7 @@ void main() {
     );
     await tester.pump();
 
-    final markdown = tester.widget<GptMarkdown>(find.byType(GptMarkdown));
+    final markdown = tester.widget<GptMarkdown>(find.byType(GptMarkdown).first);
     final markdownTheme = tester.widget<GptMarkdownTheme>(
       find.byType(GptMarkdownTheme),
     );
