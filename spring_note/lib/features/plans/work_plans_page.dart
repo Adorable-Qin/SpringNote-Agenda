@@ -227,6 +227,9 @@ class _WorkPlansPageState extends State<WorkPlansPage> {
         child: Text(title, style: Theme.of(context).textTheme.titleMedium),
       ),
       TextButton.icon(
+        style: TextButton.styleFrom(
+          textStyle: const TextStyle(decoration: TextDecoration.none),
+        ),
         onPressed: _creating ? null : () => _create(kind),
         icon: const Icon(Icons.add, size: 18),
         label: Text(_english ? 'New' : '新建'),
