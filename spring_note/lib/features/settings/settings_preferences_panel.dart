@@ -88,6 +88,47 @@ class _PreferencesPanel extends StatelessWidget {
       maxWidth: 1080,
       children: [
         _SettingsCard(
+          title: currentAppLanguage(context) == 'en' ? 'Work cycle' : '工作周期',
+          children: [
+            ListTile(
+              title: Text(
+                currentAppLanguage(context) == 'en'
+                    ? 'Reporting cadence'
+                    : '汇报周期',
+              ),
+              subtitle: Text(
+                currentAppLanguage(context) == 'en'
+                    ? 'Biweekly meetings enable merging two weekly reports in Notebook.'
+                    : '选择双周会后，可在笔记本中挑选两份周报合并为双周报。',
+              ),
+              trailing: DropdownButton<WorkReportCycle>(
+                value: config.workReportCycle,
+                items: [
+                  DropdownMenuItem(
+                    value: WorkReportCycle.weekly,
+                    child: Text(
+                      currentAppLanguage(context) == 'en' ? 'Weekly' : '周会',
+                    ),
+                  ),
+                  DropdownMenuItem(
+                    value: WorkReportCycle.biweekly,
+                    child: Text(
+                      currentAppLanguage(context) == 'en' ? 'Biweekly' : '双周会',
+                    ),
+                  ),
+                ],
+                onChanged: saving
+                    ? null
+                    : (value) {
+                        if (value != null) {
+                          onChanged(config.copyWith(workReportCycle: value));
+                        }
+                      },
+              ),
+            ),
+          ],
+        ),
+        _SettingsCard(
           title: strings.settingsFontDisplayTitle,
           children: [
             _FontSettingRow(
@@ -386,7 +427,9 @@ class _PreferencesPanel extends StatelessWidget {
                     title: strings.settingsEditDailyMergePromptTitle,
                     hintText: strings.settingsDailyMergePromptHint,
                     initialPrompt: config.dailyMergePrompt,
-                    defaultPrompt: defaultDailyMergePromptFor(currentAppLanguage(context)),
+                    defaultPrompt: defaultDailyMergePromptFor(
+                      currentAppLanguage(context),
+                    ),
                     variables: [
                       (
                         Icons.calendar_month_outlined,
@@ -425,7 +468,9 @@ class _PreferencesPanel extends StatelessWidget {
                     title: strings.settingsEditWeeklyReportPromptTitle,
                     hintText: strings.settingsWeeklyReportPromptHint,
                     initialPrompt: config.weeklyReportPrompt,
-                    defaultPrompt: defaultWeeklyReportPromptFor(currentAppLanguage(context)),
+                    defaultPrompt: defaultWeeklyReportPromptFor(
+                      currentAppLanguage(context),
+                    ),
                     variables: [
                       (
                         Icons.date_range_outlined,
@@ -459,7 +504,9 @@ class _PreferencesPanel extends StatelessWidget {
                     title: strings.settingsEditGlobalSignPromptTitle,
                     hintText: strings.settingsGlobalSignPromptHint,
                     initialPrompt: config.globalSignPrompt,
-                    defaultPrompt: defaultGlobalSignPromptFor(currentAppLanguage(context)),
+                    defaultPrompt: defaultGlobalSignPromptFor(
+                      currentAppLanguage(context),
+                    ),
                     variables: [
                       (
                         Icons.calendar_month_outlined,
@@ -858,10 +905,15 @@ class _StructuredNoteSectionsDialogState
   void _restoreDefault() {
     for (
       var index = 0;
-      index < StructuredNoteSectionConfig.defaultsFor(currentAppLanguage(context)).length;
+      index <
+          StructuredNoteSectionConfig.defaultsFor(
+            currentAppLanguage(context),
+          ).length;
       index++
     ) {
-      final section = StructuredNoteSectionConfig.defaultsFor(currentAppLanguage(context))[index];
+      final section = StructuredNoteSectionConfig.defaultsFor(
+        currentAppLanguage(context),
+      )[index];
       _titleControllers[index].text = section.title;
       _instructionControllers[index].text = section.aiInstruction;
     }

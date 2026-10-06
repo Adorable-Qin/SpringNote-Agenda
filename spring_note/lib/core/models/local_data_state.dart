@@ -1,4 +1,6 @@
 import 'app_config.dart';
+import 'note_file.dart';
+import 'package:path/path.dart' as p;
 
 class LocalDataState {
   const LocalDataState({
@@ -16,6 +18,13 @@ class LocalDataState {
   final String weeklyNotesDirectory;
   final String monthlyNotesDirectory;
   final AppConfig config;
+
+  String directoryFor(NoteKind kind) => switch (kind) {
+    NoteKind.daily => dailyNotesDirectory,
+    NoteKind.weekly => weeklyNotesDirectory,
+    NoteKind.monthly => monthlyNotesDirectory,
+    _ => p.join(dataDirectory, 'notes', kind.directoryName),
+  };
 
   LocalDataState copyWith({
     String? dataDirectory,

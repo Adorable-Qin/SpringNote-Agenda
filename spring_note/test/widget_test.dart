@@ -9,6 +9,8 @@ import 'package:spring_note/core/models/app_config.dart';
 import 'package:spring_note/core/models/cloud_sync_config.dart';
 import 'package:spring_note/core/models/global_sign_item.dart';
 import 'package:spring_note/core/models/local_data_state.dart';
+import 'package:spring_note/core/models/note_external_update.dart';
+import 'package:spring_note/core/models/note_file.dart';
 import 'package:spring_note/core/models/model_config.dart';
 import 'package:spring_note/core/models/model_reference.dart';
 import 'package:spring_note/core/models/provider_config.dart';
@@ -374,7 +376,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('home-smart-generate-button')));
     await _pumpUntil(
       tester,
-      () => fakeHomeOverviewService.savedOverview != null,
+      () => fakeHomeOverviewService.derivedOverview != null,
       'home overview to be saved',
     );
 
@@ -382,10 +384,10 @@ void main() {
     expect(find.text('问题：按钮状态需要校验'), findsOneWidget);
     expect(find.text('明天补充更多测试'), findsOneWidget);
     expect(fakeDailyNoteService.savedNote, isNotNull);
-    expect(fakeHomeOverviewService.savedOverview, isNotNull);
+    expect(fakeHomeOverviewService.derivedOverview, isNotNull);
     expect(fakeDailyNoteService.savedNote?.rawInput, contains('完成首页输入流程'));
     expect(
-      fakeHomeOverviewService.savedOverview?.itemsFor(
+      fakeHomeOverviewService.derivedOverview?.itemsFor(
         StructuredNoteSectionIds.a,
       ),
       contains('完成首页输入流程'),
@@ -434,7 +436,7 @@ void main() {
     aiClientService.complete();
     await _pumpUntil(
       tester,
-      () => homeOverviewService.savedOverview != null,
+      () => homeOverviewService.derivedOverview != null,
       'structured generation to finish',
     );
 
@@ -444,6 +446,60 @@ void main() {
       '下一条预先输入的内容',
     );
   });
+
+  testWidgets(
+    'home cards follow today edits and deletion, ignoring historical notes',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final source = _FakeDailyNoteService(markdown: '## 完成事项\n- 原来的事项');
+      final updates = ValueNotifier<NoteExternalUpdate?>(null);
+      addTearDown(updates.dispose);
+      final state = _testLocalDataState();
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: HomePage(
+            localDataState: state,
+            dailyNoteService: source,
+            externalNoteUpdate: updates,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('原来的事项'), findsOneWidget);
+      source.markdown = '## 问题记录\n- 修改后的事项';
+      updates.value = NoteExternalUpdate(
+        kind: NoteKind.daily,
+        path: source.dailyNotePath(state.dailyNotesDirectory, DateTime(2000)),
+        revision: 1,
+      );
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('原来的事项'), findsOneWidget);
+      updates.value = NoteExternalUpdate(
+        kind: NoteKind.daily,
+        path: source.dailyNotePath(state.dailyNotesDirectory, DateTime.now()),
+        revision: 2,
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(find.text('原来的事项'), findsNothing);
+      expect(find.text('修改后的事项'), findsOneWidget);
+      source.markdown = '';
+      updates.value = NoteExternalUpdate(
+        kind: NoteKind.daily,
+        path: state.dailyNotesDirectory,
+        revision: 3,
+      );
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(find.text('修改后的事项'), findsNothing);
+      expect(find.text('00'), findsNWidgets(3));
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('home overview reads section titles from config', (
     WidgetTester tester,
@@ -503,8 +559,12 @@ void main() {
         ),
       ],
     );
-    final homeOverviewService = _FakeHomeOverviewService(
-      initialOverview: overview,
+    final homeOverviewService = _FakeHomeOverviewService();
+    final dailyNoteService = _FakeDailyNoteService(
+      markdown: [
+        for (final section in StructuredNoteSectionConfig.defaults)
+          '## ${section.title}\n${overview.itemsFor(section.id).map((item) => '- $item').join('\n')}',
+      ].join('\n'),
     );
 
     await tester.pumpWidget(
@@ -513,6 +573,7 @@ void main() {
         home: HomePage(
           localDataState: _testLocalDataState(),
           homeOverviewService: homeOverviewService,
+          dailyNoteService: dailyNoteService,
         ),
       ),
     );
@@ -630,10 +691,10 @@ void main() {
       );
 
       expect(fakeDailyNoteService.savedNote, isNotNull);
-      expect(fakeHomeOverviewService.savedOverview, isNotNull);
+      expect(fakeHomeOverviewService.derivedOverview, isNotNull);
       expect(fakeDailyNoteService.savedNote?.rawInput, contains('用快捷键整理首页内容'));
       expect(
-        fakeHomeOverviewService.savedOverview?.itemsFor(
+        fakeHomeOverviewService.derivedOverview?.itemsFor(
           StructuredNoteSectionIds.a,
         ),
         contains('用快捷键整理首页内容'),
@@ -1241,6 +1302,8 @@ String _sharedImagePathForNote(String notePath, String imageName) {
 }
 
 class _FakeDailyNoteService extends DailyNoteService {
+  _FakeDailyNoteService({this.markdown = ''});
+  String markdown;
   StructuredWorkNote? savedNote;
 
   @override
@@ -1248,7 +1311,7 @@ class _FakeDailyNoteService extends DailyNoteService {
     required String dailyNotesDirectory,
     required DateTime date,
   }) async {
-    return '';
+    return markdown;
   }
 
   @override
@@ -1262,33 +1325,30 @@ class _FakeDailyNoteService extends DailyNoteService {
     String language = 'zh',
   }) async {
     savedNote = note;
+    final appended = [
+      for (final section in sectionConfigs)
+        '## ${section.title}\n${note.itemsFor(section.id).map((item) => '- $item').join('\n')}',
+    ].join('\n');
+    markdown = mergedMarkdown ?? '$markdown\n$appended';
     return '$dailyNotesDirectory\\2026-06-18.md';
   }
 }
 
 class _FakeHomeOverviewService extends HomeOverviewService {
-  _FakeHomeOverviewService({this.initialOverview = StructuredWorkNote.empty});
-
-  final StructuredWorkNote initialOverview;
-  StructuredWorkNote? savedOverview;
+  StructuredWorkNote? derivedOverview;
 
   @override
-  Future<StructuredWorkNote> readOverview({
-    required String appDataDir,
-    required DateTime date,
-  }) async {
-    return initialOverview;
-  }
-
-  @override
-  Future<StructuredWorkNote> mergeAndSaveOverview({
-    required String appDataDir,
-    required DateTime date,
-    required StructuredWorkNote current,
-    required StructuredWorkNote incoming,
-  }) async {
-    savedOverview = incoming.mergeWithOlder(current);
-    return savedOverview!;
+  StructuredWorkNote fromDailyMarkdown(
+    String markdown, {
+    List<StructuredNoteSectionConfig> sectionConfigs =
+        StructuredNoteSectionConfig.defaults,
+  }) {
+    final result = super.fromDailyMarkdown(
+      markdown,
+      sectionConfigs: sectionConfigs,
+    );
+    if (markdown.isNotEmpty) derivedOverview = result;
+    return result;
   }
 }
 

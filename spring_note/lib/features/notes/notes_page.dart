@@ -20,9 +20,9 @@ import '../../core/services/note_upload_queue.dart';
 import '../../core/services/pasted_image_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/markdown_editor_highlight.dart';
-import '../../core/widgets/page_scaffold.dart';
 import '../../l10n/l10n.dart';
 import 'markdown_preview.dart';
+import 'weekly_report_picker.dart';
 
 typedef NoteImagePicker = Future<List<NoteImageAttachment>> Function();
 
@@ -93,6 +93,8 @@ class _NotesPageState extends State<NotesPage> {
   List<NoteFile> _notes = [];
   NoteFile? _selectedNote;
   bool _loading = true;
+  bool _mutatingNotes = false;
+  final Set<String> _deletedPaths = {};
   bool _saving = false;
   bool _predicting = false;
   String _statusText = '';
@@ -166,6 +168,11 @@ class _NotesPageState extends State<NotesPage> {
     if (widget.externalNoteUpdate != oldWidget.externalNoteUpdate) {
       oldWidget.externalNoteUpdate?.removeListener(_handleExternalNoteUpdate);
       widget.externalNoteUpdate?.addListener(_handleExternalNoteUpdate);
+    }
+    if (widget.localDataState.config.workReportCycle ==
+            WorkReportCycle.weekly &&
+        _kind == NoteKind.biweekly) {
+      unawaited(_loadNotes(kind: NoteKind.daily));
     }
     if (_localDataDirectoryChanged(oldWidget.localDataState)) {
       unawaited(_loadNotes(kind: _kind));
@@ -338,6 +345,14 @@ class _NotesPageState extends State<NotesPage> {
       kind: _kind,
     );
 
+    if (!mounted || _kind != update.kind) return;
+    if ((selected == null && notes.isNotEmpty) ||
+        (selected != null &&
+            !notes.any((note) => _samePath(note.path, selected.path)))) {
+      await _loadNotes(kind: update.kind, selectedPath: update.path);
+      return;
+    }
+
     String? selectedContent;
     if (selected != null && _samePath(selected.path, update.path)) {
       selectedContent = await widget.noteService.readMarkdown(selected.path);
@@ -385,40 +400,19 @@ class _NotesPageState extends State<NotesPage> {
     });
 
     final directory = _directoryFor(kind);
-    var notes = await widget.noteService.listMarkdownFiles(
+    final notes = await widget.noteService.listMarkdownFiles(
       directoryPath: directory,
       kind: kind,
     );
-    NoteFile? currentDailyNote;
-    if (kind == NoteKind.daily) {
-      currentDailyNote = await widget.noteService.ensureCurrentMarkdownFile(
-        directoryPath: directory,
-        kind: kind,
-      );
-      notes = await widget.noteService.listMarkdownFiles(
-        directoryPath: directory,
-        kind: kind,
-      );
-    } else if (notes.isEmpty) {
-      final current = await widget.noteService.ensureCurrentMarkdownFile(
-        directoryPath: directory,
-        kind: kind,
-      );
-      notes = [current];
-    }
-
-    final selected = selectedPath == null
-        ? currentDailyNote == null
-              ? notes.first
-              : notes.firstWhere(
-                  (note) => _samePath(note.path, currentDailyNote!.path),
-                  orElse: () => currentDailyNote!,
-                )
+    final selected = notes.isEmpty
+        ? null
         : notes.firstWhere(
             (note) => note.path == selectedPath,
             orElse: () => notes.first,
           );
-    final content = await widget.noteService.readMarkdown(selected.path);
+    final content = selected == null
+        ? ''
+        : await widget.noteService.readMarkdown(selected.path);
 
     if (!mounted ||
         generation != _notesLoadGeneration ||
@@ -435,6 +429,147 @@ class _NotesPageState extends State<NotesPage> {
     });
     _scheduleSearch(immediate: true);
     unawaited(_refreshNoteIndex(kind: kind, loadGeneration: generation));
+  }
+
+  Future<void> _createNote() async {
+    final state = widget.localDataState;
+    final kind = _kind;
+    final english = currentAppLanguage(context) == 'en';
+    setState(() => _mutatingNotes = true);
+    try {
+      NoteFile note;
+      if (kind == NoteKind.biweekly) {
+        final sources = await widget.noteService.listMarkdownFiles(
+          directoryPath: state.weeklyNotesDirectory,
+          kind: NoteKind.weekly,
+        );
+        if (!mounted) return;
+        final selected = await showDialog<List<NoteFile>>(
+          context: context,
+          builder: (_) => WeeklyReportPicker(notes: sources, english: english),
+        );
+        if (selected == null ||
+            !mounted ||
+            state.dataDirectory != widget.localDataState.dataDirectory) {
+          return;
+        }
+        note = await widget.noteService.mergeWeeklyReports(
+          directoryPath: state.directoryFor(kind),
+          sources: selected,
+          english: english,
+        );
+      } else {
+        final date = await showDatePicker(
+          context: context,
+          initialDate: DateTime.now(),
+          firstDate: DateTime(2000),
+          lastDate: DateTime(2100),
+          helpText: english ? 'Choose the note date' : '选择笔记日期（同一周期会打开已有笔记）',
+        );
+        if (date == null ||
+            !mounted ||
+            state.dataDirectory != widget.localDataState.dataDirectory) {
+          return;
+        }
+        note = await widget.noteService.ensureCurrentMarkdownFile(
+          directoryPath: state.directoryFor(kind),
+          kind: kind,
+          now: date,
+        );
+      }
+      _deletedPaths.remove(note.path);
+      if (!mounted ||
+          state.dataDirectory != widget.localDataState.dataDirectory) {
+        return;
+      }
+      _searchController.clear();
+      await _loadNotes(kind: kind, selectedPath: note.path);
+      widget.onNoteSaved?.call(note);
+      _noteUploadQueue.markDirty(note.path);
+      _editorFocusNode.requestFocus();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${english ? 'Could not create note' : '新建失败'}：$error',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _mutatingNotes = false);
+    }
+  }
+
+  Future<void> _deleteNote(NoteFile note) async {
+    if (_mutatingNotes || _regeneratingReport) return;
+    final english = currentAppLanguage(context) == 'en';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(english ? 'Delete note?' : '删除笔记？'),
+        content: Text(
+          english
+              ? 'Delete “${note.title}”? This cannot be undone.'
+              : '确定删除“${note.title}”吗？此操作无法撤销。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(english ? 'Cancel' : '取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(english ? 'Delete' : '删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final state = widget.localDataState;
+    _deletedPaths.add(note.path);
+    _calendarPromptDebounce?.cancel();
+    _fimDebounce?.cancel();
+    _fimGeneration++;
+    _saveGeneration++;
+    setState(() {
+      _mutatingNotes = true;
+      _loading = true;
+    });
+    try {
+      await widget.noteService.deleteMarkdown(note);
+      _noteUploadQueue.forget(note.path);
+      if (!mounted ||
+          state.dataDirectory != widget.localDataState.dataDirectory) {
+        return;
+      }
+      await _loadNotes(
+        kind: _kind,
+        selectedPath: _selectedNote?.path == note.path
+            ? null
+            : _selectedNote?.path,
+      );
+      widget.onNoteSaved?.call(note);
+    } catch (error) {
+      _deletedPaths.remove(note.path);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${english ? 'Could not delete note' : '删除失败'}：$error',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _mutatingNotes = false;
+          _loading = false;
+        });
+      }
+    }
   }
 
   Future<void> _selectNote(
@@ -677,6 +812,7 @@ class _NotesPageState extends State<NotesPage> {
   }
 
   Future<void> _saveEditorText(NoteFile selected, String text) async {
+    if (_deletedPaths.contains(selected.path)) return;
     final generation = ++_saveGeneration;
     final kind = selected.kind;
     final directory = _directoryFor(kind);
@@ -685,6 +821,7 @@ class _NotesPageState extends State<NotesPage> {
     });
 
     await widget.noteService.writeMarkdown(selected.path, text);
+    if (_deletedPaths.contains(selected.path)) return;
     _noteUploadQueue.markDirty(selected.path);
     await widget.noteService.indexMarkdownFile(
       directoryPath: directory,
@@ -1104,6 +1241,7 @@ class _NotesPageState extends State<NotesPage> {
         return;
       }
       if (result.ok) {
+        widget.onNoteSaved?.call(selected);
         final stillSelected =
             _kind == kind &&
             _samePath(_selectedNote?.path ?? '', selected.path);
@@ -1451,6 +1589,7 @@ class _NotesPageState extends State<NotesPage> {
       NoteKind.daily => widget.localDataState.dailyNotesDirectory,
       NoteKind.weekly => widget.localDataState.weeklyNotesDirectory,
       NoteKind.monthly => widget.localDataState.monthlyNotesDirectory,
+      _ => widget.localDataState.directoryFor(kind),
     };
   }
 
@@ -1535,6 +1674,16 @@ class _NotesPageState extends State<NotesPage> {
             searchController: _searchController,
             onKindChanged: (kind) => _loadNotes(kind: kind),
             onNoteSelected: _selectNote,
+            onCreate: _mutatingNotes ? null : _createNote,
+            onDelete: _deleteNote,
+            availableKinds: [
+              NoteKind.daily,
+              NoteKind.weekly,
+              NoteKind.monthly,
+              if (widget.localDataState.config.workReportCycle ==
+                  WorkReportCycle.biweekly)
+                NoteKind.biweekly,
+            ],
           ),
           Expanded(
             flex: 64,
@@ -1553,7 +1702,9 @@ class _NotesPageState extends State<NotesPage> {
                   : _parentDirectoryPath(selected.path),
               onInsertImage: _insertImageFromPicker,
               regenerating: _regeneratingReport,
-              onRegenerate: _regenerateSelectedReport,
+              onRegenerate: _kind == NoteKind.biweekly
+                  ? null
+                  : _regenerateSelectedReport,
               onPointerFocus: _handleEditorPointerFocus,
               onModeChanged: _handleWorkspaceModeChanged,
             ),
@@ -1691,6 +1842,8 @@ class _FimTextEditingController extends TextEditingController {
 class _NotesSidebar extends StatelessWidget {
   const _NotesSidebar({
     required this.kind,
+    required this.onCreate,
+    required this.availableKinds,
     required this.notes,
     required this.searchResults,
     required this.searchQuery,
@@ -1699,9 +1852,12 @@ class _NotesSidebar extends StatelessWidget {
     required this.searchController,
     required this.onKindChanged,
     required this.onNoteSelected,
+    required this.onDelete,
   });
 
   final NoteKind kind;
+  final VoidCallback? onCreate;
+  final List<NoteKind> availableKinds;
   final List<NoteFile> notes;
   final List<NoteFile> searchResults;
   final String searchQuery;
@@ -1710,6 +1866,7 @@ class _NotesSidebar extends StatelessWidget {
   final TextEditingController searchController;
   final ValueChanged<NoteKind> onKindChanged;
   final ValueChanged<NoteFile> onNoteSelected;
+  final ValueChanged<NoteFile> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1731,22 +1888,26 @@ class _NotesSidebar extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: colors.surfaceMuted,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  noteKindLabel(context, kind),
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
+              _NotesKindMenuButton(
+                kind: kind,
+                onKindChanged: onKindChanged,
+                availableKinds: availableKinds,
               ),
-              const Spacer(),
-              _NotesKindMenuButton(kind: kind, onKindChanged: onKindChanged),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          FilledButton.tonalIcon(
+            onPressed: onCreate,
+            icon: const Icon(Icons.add, size: 18),
+            label: Text(
+              kind == NoteKind.biweekly
+                  ? (currentAppLanguage(context) == 'en'
+                        ? 'Merge weekly reports'
+                        : '合并两周周报')
+                  : (currentAppLanguage(context) == 'en' ? 'New' : '新建'),
+            ),
+          ),
+          const SizedBox(height: 12),
           _NotesSearchField(
             controller: searchController,
             hintText: l10n(
@@ -1762,6 +1923,7 @@ class _NotesSidebar extends StatelessWidget {
                     searching: searching,
                     selectedPath: selectedPath,
                     onNoteSelected: onNoteSelected,
+                    onDelete: onDelete,
                   )
                 : notes.isEmpty
                 ? Center(
@@ -1774,6 +1936,7 @@ class _NotesSidebar extends StatelessWidget {
                     notes: notes,
                     selectedPath: selectedPath,
                     onNoteSelected: onNoteSelected,
+                    onDelete: onDelete,
                   ),
           ),
         ],
@@ -1789,6 +1952,7 @@ class _FilteredNoteList extends StatelessWidget {
     required this.searching,
     required this.selectedPath,
     required this.onNoteSelected,
+    required this.onDelete,
   });
 
   final List<NoteFile> results;
@@ -1796,6 +1960,7 @@ class _FilteredNoteList extends StatelessWidget {
   final bool searching;
   final String? selectedPath;
   final ValueChanged<NoteFile> onNoteSelected;
+  final ValueChanged<NoteFile> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1821,6 +1986,7 @@ class _FilteredNoteList extends StatelessWidget {
       notes: results,
       selectedPath: selectedPath,
       onNoteSelected: onNoteSelected,
+      onDelete: onDelete,
     );
   }
 }
@@ -1830,11 +1996,13 @@ class _NoteList extends StatelessWidget {
     required this.notes,
     required this.selectedPath,
     required this.onNoteSelected,
+    required this.onDelete,
   });
 
   final List<NoteFile> notes;
   final String? selectedPath;
   final ValueChanged<NoteFile> onNoteSelected;
+  final ValueChanged<NoteFile> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -1843,11 +2011,33 @@ class _NoteList extends StatelessWidget {
       separatorBuilder: (context, index) => const SizedBox(height: 6),
       itemBuilder: (context, index) {
         final note = notes[index];
-        return _NoteListItem(
-          key: ValueKey(note.path),
-          note: note,
-          selected: _sameDisplayPath(note.path, selectedPath),
-          onTap: () => onNoteSelected(note),
+        return GestureDetector(
+          onSecondaryTapUp: (details) async {
+            final overlay =
+                Overlay.of(context).context.findRenderObject() as RenderBox;
+            final action = await showMenu<String>(
+              context: context,
+              position: RelativeRect.fromRect(
+                details.globalPosition & const Size(1, 1),
+                Offset.zero & overlay.size,
+              ),
+              items: [
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text(
+                    currentAppLanguage(context) == 'en' ? 'Delete' : '删除',
+                  ),
+                ),
+              ],
+            );
+            if (action == 'delete') onDelete(note);
+          },
+          child: _NoteListItem(
+            key: ValueKey(note.path),
+            note: note,
+            selected: _sameDisplayPath(note.path, selectedPath),
+            onTap: () => onNoteSelected(note),
+          ),
         );
       },
     );
@@ -1867,11 +2057,22 @@ String noteKindLabel(BuildContext context, NoteKind kind) {
     NoteKind.daily => l10n(context).notesKindDaily,
     NoteKind.weekly => l10n(context).notesKindWeekly,
     NoteKind.monthly => l10n(context).notesKindMonthly,
+    NoteKind.biweekly =>
+      currentAppLanguage(context) == 'en' ? 'Biweekly report' : '双周报',
+    NoteKind.monthlyPlan =>
+      currentAppLanguage(context) == 'en' ? 'Monthly plan' : '月度计划',
+    NoteKind.weeklyPlan =>
+      currentAppLanguage(context) == 'en' ? 'Weekly plan' : '周计划',
   };
 }
 
 class _NotesKindMenuButton extends StatefulWidget {
-  const _NotesKindMenuButton({required this.kind, required this.onKindChanged});
+  final List<NoteKind> availableKinds;
+  const _NotesKindMenuButton({
+    required this.kind,
+    required this.onKindChanged,
+    required this.availableKinds,
+  });
 
   final NoteKind kind;
   final ValueChanged<NoteKind> onKindChanged;
@@ -1885,6 +2086,14 @@ class _NotesKindMenuButtonState extends State<_NotesKindMenuButton> {
   OverlayEntry? _overlayEntry;
 
   bool get _open => _overlayEntry != null;
+
+  @override
+  void didUpdateWidget(covariant _NotesKindMenuButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!listEquals(oldWidget.availableKinds, widget.availableKinds)) {
+      _removeOverlay(updateState: false);
+    }
+  }
 
   @override
   void dispose() {
@@ -1915,12 +2124,13 @@ class _NotesKindMenuButtonState extends State<_NotesKindMenuButton> {
           CompositedTransformFollower(
             link: _layerLink,
             showWhenUnlinked: false,
-            targetAnchor: Alignment.bottomRight,
-            followerAnchor: Alignment.topRight,
+            targetAnchor: Alignment.bottomLeft,
+            followerAnchor: Alignment.topLeft,
             offset: const Offset(0, 6),
             child: _NotesKindMenuTransition(
               child: _NotesKindMenu(
                 selectedKind: widget.kind,
+                availableKinds: widget.availableKinds,
                 onSelected: (kind) {
                   _removeOverlay();
                   if (kind != widget.kind) {
@@ -1956,9 +2166,27 @@ class _NotesKindMenuButtonState extends State<_NotesKindMenuButton> {
       child: Semantics(
         label: l10n(context).notesSwitchKindSemantics,
         button: true,
-        child: SpringNoteIconButton(
-          icon: Icons.more_horiz,
+        child: TextButton(
+          key: const ValueKey('note-kind-selector'),
+          style: TextButton.styleFrom(
+            backgroundColor: AppTheme.colors(context).surfaceMuted,
+            foregroundColor: AppTheme.colors(context).text,
+            textStyle: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(decoration: TextDecoration.none),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            minimumSize: const Size(60, 28),
+            alignment: Alignment.center,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
           onPressed: _toggleOverlay,
+          child: Text(
+            noteKindLabel(context, widget.kind),
+            textAlign: TextAlign.center,
+          ),
         ),
       ),
     );
@@ -1985,7 +2213,13 @@ class _NotesKindMenuTransition extends StatelessWidget {
 }
 
 class _NotesKindMenu extends StatefulWidget {
-  const _NotesKindMenu({required this.selectedKind, required this.onSelected});
+  const _NotesKindMenu({
+    required this.selectedKind,
+    required this.onSelected,
+    required this.availableKinds,
+  });
+
+  final List<NoteKind> availableKinds;
 
   final NoteKind selectedKind;
   final ValueChanged<NoteKind> onSelected;
@@ -2038,10 +2272,11 @@ class _NotesKindMenuState extends State<_NotesKindMenu> {
               ),
             ),
             SizedBox(
-              height: _NotesKindMenuItem.itemHeight * NoteKind.values.length,
+              height:
+                  _NotesKindMenuItem.itemHeight * widget.availableKinds.length,
               child: Column(
                 children: [
-                  for (final kind in NoteKind.values)
+                  for (final kind in widget.availableKinds)
                     _NotesKindMenuItem(
                       kind: kind,
                       selected: kind == widget.selectedKind,
@@ -2210,6 +2445,7 @@ class _NotesKindMenuItem extends StatelessWidget {
       NoteKind.daily => Icons.calendar_today_outlined,
       NoteKind.weekly => Icons.view_week_outlined,
       NoteKind.monthly => Icons.calendar_month_outlined,
+      _ => Icons.event_note_outlined,
     };
   }
 
@@ -2218,6 +2454,10 @@ class _NotesKindMenuItem extends StatelessWidget {
       NoteKind.daily => l10n(context).notesKindDailyDescription,
       NoteKind.weekly => l10n(context).notesKindWeeklyDescription,
       NoteKind.monthly => l10n(context).notesKindMonthlyDescription,
+      _ =>
+        currentAppLanguage(context) == 'en'
+            ? 'Merge two weekly reports'
+            : '选择两份周报合并汇报',
     };
   }
 }
@@ -2481,7 +2721,7 @@ class _EditorWorkspace extends StatefulWidget {
   final String? localImageBasePath;
   final VoidCallback onInsertImage;
   final bool regenerating;
-  final VoidCallback onRegenerate;
+  final VoidCallback? onRegenerate;
   final VoidCallback onPointerFocus;
   final ValueChanged<_EditorWorkspaceMode> onModeChanged;
 
@@ -2678,7 +2918,7 @@ class _EditorWorkspaceHeader extends StatelessWidget {
   final VoidCallback onInsertImage;
   final bool regenerateEnabled;
   final bool regenerating;
-  final VoidCallback onRegenerate;
+  final VoidCallback? onRegenerate;
   final _EditorWorkspaceMode mode;
   final ValueChanged<_EditorWorkspaceMode> onModeChanged;
 

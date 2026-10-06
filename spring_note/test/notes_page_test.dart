@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spring_note/core/models/app_config.dart';
@@ -21,6 +22,92 @@ import 'package:spring_note/features/notes/notes_page.dart';
 import 'package:spring_note/src/rust/cloud_sync.dart' as rust_model;
 
 void main() {
+  testWidgets(
+    'notebook creates explicitly and right-click deletes without recreating',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final service = _MemoryNoteService({});
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          home: Scaffold(
+            body: NotesPage(
+              localDataState: _localDataState,
+              noteService: service,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(service.contents, isEmpty);
+      await tester.tap(find.text('新建'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      expect(service.contents, hasLength(1));
+      await tester.tap(
+        find.byKey(ValueKey(service.contents.keys.single)),
+        buttons: kSecondaryMouseButton,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('删除'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '删除'));
+      await tester.pumpAndSettle();
+      expect(service.contents, isEmpty);
+      await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('周报').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('日报').last);
+      await tester.pumpAndSettle();
+      expect(service.contents, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'biweekly option follows work cycle without deleting existing reports',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final service = _MemoryNoteService({});
+      Widget app(WorkReportCycle cycle) => MaterialApp(
+        theme: AppTheme.light(),
+        home: NotesPage(
+          localDataState: _localDataState.copyWith(
+            config: _localDataState.config.copyWith(workReportCycle: cycle),
+          ),
+          noteService: service,
+        ),
+      );
+      await tester.pumpWidget(app(WorkReportCycle.weekly));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
+      await tester.pumpAndSettle();
+      expect(find.text('双周报'), findsNothing);
+      await tester.tap(find.text('日报').last);
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(app(WorkReportCycle.biweekly));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('双周报'));
+      await tester.pumpAndSettle();
+      expect(find.text('合并两周周报'), findsOneWidget);
+      await tester.pumpWidget(app(WorkReportCycle.weekly));
+      await tester.pumpAndSettle();
+      expect(find.text('合并两周周报'), findsNothing);
+    },
+  );
+
   testWidgets('notes page loads edits previews and saves markdown', (
     WidgetTester tester,
   ) async {
@@ -451,7 +538,7 @@ final value = 1;
     expect(find.text('日报命中'), findsOneWidget);
     expect(find.text('周报命中'), findsNothing);
 
-    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('周报').last);
     await tester.pump();
@@ -609,7 +696,8 @@ final value = 1;
     );
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.more_horiz));
+    expect(find.byIcon(Icons.more_horiz), findsNothing);
+    await tester.tap(find.widgetWithText(TextButton, '日报'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('周报').last);
     await tester.pump();
@@ -648,13 +736,13 @@ final value = 1;
     await tester.enterText(editor, '# 日报\n编辑内容');
     await tester.pump(const Duration(milliseconds: 600));
 
-    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('周报').last);
     await tester.pumpAndSettle();
     expect(_editableRealText(tester), '# 周报\n');
 
-    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.tap(find.byKey(const ValueKey('note-kind-selector')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('月报').last);
     await tester.pumpAndSettle();
@@ -1612,6 +1700,11 @@ class _MemoryNoteService extends NoteService {
   final Map<String, String> contents;
 
   @override
+  Future<void> deleteMarkdown(NoteFile note) async {
+    contents.remove(note.path);
+  }
+
+  @override
   Future<List<NoteFile>> listMarkdownFiles({
     required String directoryPath,
     required NoteKind kind,
@@ -1635,6 +1728,7 @@ class _MemoryNoteService extends NoteService {
       NoteKind.daily => '2026-06-18.md',
       NoteKind.weekly => '2026-W25.md',
       NoteKind.monthly => '2026-06.md',
+      _ => throw UnsupportedError('Use merge or plan service'),
     };
     final path = '$directoryPath\\$name';
     contents.putIfAbsent(path, () => '# ${kind.label}\n');

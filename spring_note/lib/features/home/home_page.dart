@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:file_selector/file_selector.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/attachments/attachment_manager.dart';
@@ -11,6 +12,8 @@ import '../../core/attachments/pending_image.dart';
 
 import '../../core/models/app_language.dart';
 import '../../core/models/local_data_state.dart';
+import '../../core/models/note_external_update.dart';
+import '../../core/models/note_file.dart';
 import '../../core/models/global_sign_item.dart';
 import '../../core/models/structured_note_section_config.dart';
 import '../../core/models/structured_work_note.dart';
@@ -81,6 +84,8 @@ class HomePage extends StatefulWidget {
     this.imageAttachmentPicker,
     this.documentAttachmentPicker,
     this.onDailyNoteSaved,
+    this.externalNoteUpdate,
+    this.isActive = true,
     this.startupCloudSyncMessage,
   });
 
@@ -100,6 +105,8 @@ class HomePage extends StatefulWidget {
   final HomeAttachmentPicker? documentAttachmentPicker;
   final ValueChanged<String>? onDailyNoteSaved;
   final String? startupCloudSyncMessage;
+  final ValueListenable<NoteExternalUpdate?>? externalNoteUpdate;
+  final bool isActive;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -112,6 +119,10 @@ class _HomePageState extends State<HomePage> {
   List<HomeAttachment> _attachments = const [];
 
   StructuredWorkNote _overview = StructuredWorkNote.empty;
+  Timer? _overviewDebounce;
+  Timer? _dayTimer;
+  int _overviewRevision = 0;
+  DateTime _overviewDate = DateUtils.dateOnly(DateTime.now());
   bool _isSubmitting = false;
   bool _isPastingImages = false;
   String? _lastSavedPath;
@@ -123,6 +134,12 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _attachmentManager = widget.attachmentManager ?? AttachmentManager();
+    widget.externalNoteUpdate?.addListener(_onDailyNoteChanged);
+    _dayTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (!DateUtils.isSameDay(_overviewDate, DateTime.now())) {
+        _loadTodayOverview();
+      }
+    });
     _loadTodayOverview();
     _loadHomeStats();
   }
@@ -130,8 +147,12 @@ class _HomePageState extends State<HomePage> {
   @override
   void didUpdateWidget(covariant HomePage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.localDataState.dataDirectory !=
-        oldWidget.localDataState.dataDirectory) {
+    if (oldWidget.externalNoteUpdate != widget.externalNoteUpdate) {
+      oldWidget.externalNoteUpdate?.removeListener(_onDailyNoteChanged);
+      widget.externalNoteUpdate?.addListener(_onDailyNoteChanged);
+    }
+    if (widget.localDataState != oldWidget.localDataState ||
+        (widget.isActive && !oldWidget.isActive)) {
       _loadTodayOverview();
       _loadHomeStats();
     }
@@ -139,24 +160,57 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    widget.externalNoteUpdate?.removeListener(_onDailyNoteChanged);
+    _overviewDebounce?.cancel();
+    _dayTimer?.cancel();
     _attachmentManager.clear();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
+  void _onDailyNoteChanged() {
+    final update = widget.externalNoteUpdate?.value;
+    if (update == null || update.kind != NoteKind.daily) return;
+    final directory = widget.localDataState.dailyNotesDirectory;
+    final todayPath = widget.dailyNoteService.dailyNotePath(
+      directory,
+      DateTime.now(),
+    );
+    if (!p.equals(update.path, directory) &&
+        !p.equals(update.path, todayPath)) {
+      return;
+    }
+    _overviewRevision++;
+    _overviewDebounce?.cancel();
+    _overviewDebounce = Timer(
+      const Duration(milliseconds: 500),
+      _loadTodayOverview,
+    );
+  }
+
   Future<void> _loadTodayOverview() async {
+    final revision = ++_overviewRevision;
+    _overviewDebounce?.cancel();
+    final date = DateTime.now();
+    _overviewDate = DateUtils.dateOnly(date);
+    final state = widget.localDataState;
     try {
-      final overview = await widget.homeOverviewService.readOverview(
-        appDataDir: widget.localDataState.dataDirectory,
-        date: DateTime.now(),
+      final markdown = await widget.dailyNoteService.readDailyMarkdown(
+        dailyNotesDirectory: state.dailyNotesDirectory,
+        date: date,
       );
-      if (mounted) {
-        setState(() => _overview = overview);
-      }
+      if (!mounted || revision != _overviewRevision) return;
+      final overview = widget.homeOverviewService.fromDailyMarkdown(
+        markdown,
+        sectionConfigs: state.config.structuredNoteSections,
+      );
+      setState(() => _overview = overview);
     } catch (_) {
-      // Overview JSON is a UI cache; malformed or unavailable files should not
-      // block daily note writing.
+      // An unavailable source must not leave another diary's content visible.
+      if (mounted && revision == _overviewRevision) {
+        setState(() => _overview = StructuredWorkNote.empty);
+      }
     }
   }
 
@@ -257,15 +311,14 @@ class _HomePageState extends State<HomePage> {
         );
       } else {
         // 默认提示词不使用栏目变量,结构化(三栏)与日报合并互不依赖,并发发起。
-        final (structuredResult, mergeResult) =
-            await (
-              _tryGenerateStructuredNote(submissionInput, aiImages),
-              _tryMergeDailyMarkdown(
-                existingMarkdown,
-                StructuredWorkNote(rawInput: submissionInput, sections: const []),
-                now,
-              ),
-            ).wait;
+        final (structuredResult, mergeResult) = await (
+          _tryGenerateStructuredNote(submissionInput, aiImages),
+          _tryMergeDailyMarkdown(
+            existingMarkdown,
+            StructuredWorkNote(rawInput: submissionInput, sections: const []),
+            now,
+          ),
+        ).wait;
         aiStructured = structuredResult;
         aiMergedMarkdown = mergeResult;
       }
@@ -291,24 +344,13 @@ class _HomePageState extends State<HomePage> {
       await widget.statsService.recordHomeGeneration(
         appDataDir: widget.localDataState.dataDirectory,
       );
-      StructuredWorkNote nextOverview;
-      try {
-        nextOverview = await widget.homeOverviewService.mergeAndSaveOverview(
-          appDataDir: widget.localDataState.dataDirectory,
-          date: now,
-          current: _overview,
-          incoming: structured,
-        );
-      } catch (_) {
-        nextOverview = _mergeOverview(_overview, structured);
-      }
+      await _loadTodayOverview();
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _overview = nextOverview;
         _lastSavedPath = savedPath;
         _aiNotice = aiFailed || !hasConfiguredModel || aiMergedMarkdown == null
             ? l10n(context).homeAiNoticeNoModel
@@ -435,7 +477,9 @@ class _HomePageState extends State<HomePage> {
       await _pasteClipboardText();
     } catch (_) {
       if (mounted) {
-        setState(() => _attachmentError = l10n(context).homeClipboardImageError);
+        setState(
+          () => _attachmentError = l10n(context).homeClipboardImageError,
+        );
       }
     } finally {
       _isPastingImages = false;
@@ -575,17 +619,16 @@ class _HomePageState extends State<HomePage> {
     }
     if (skippedForLimit > 0) {
       messages.add(
-        l10n(context).homeImageLimitExceeded(
-          skippedForLimit,
-          _maxHomeImageAttachments,
-        ),
+        l10n(
+          context,
+        ).homeImageLimitExceeded(skippedForLimit, _maxHomeImageAttachments),
       );
     }
     if (unsupportedAiNames.isNotEmpty) {
       messages.add(
-        l10n(context).homeImageUnsupportedForAi(
-          _formatNameList(unsupportedAiNames),
-        ),
+        l10n(
+          context,
+        ).homeImageUnsupportedForAi(_formatNameList(unsupportedAiNames)),
       );
     }
     if (added == 0 && messages.isEmpty) {
@@ -616,7 +659,9 @@ class _HomePageState extends State<HomePage> {
 
   String _formatNameList(List<String> names) {
     const maxNames = 3;
-    final visible = names.take(maxNames).join(l10n(context).homeImageNamesSeparator);
+    final visible = names
+        .take(maxNames)
+        .join(l10n(context).homeImageNamesSeparator);
     final remaining = names.length - maxNames;
     return remaining > 0
         ? l10n(context).homeImageNamesRemaining(remaining, visible)
@@ -730,13 +775,6 @@ class _HomePageState extends State<HomePage> {
     setState(() => _attachmentManager.removeImage(image.id));
   }
 
-  StructuredWorkNote _mergeOverview(
-    StructuredWorkNote current,
-    StructuredWorkNote incoming,
-  ) {
-    return incoming.mergeWithOlder(current);
-  }
-
   Future<StructuredWorkNote?> _tryGenerateStructuredNote(
     String submissionInput,
     List<AiImageInput> aiImages,
@@ -841,12 +879,11 @@ class _HomePageState extends State<HomePage> {
     await showDialog<void>(
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.48),
-      builder: (context) =>
-          GlobalSignDialog(
-            items: items,
-            onConfirm: _handleGlobalSignConfirm,
-            onDeleteItem: _deleteGlobalSignItem,
-          ),
+      builder: (context) => GlobalSignDialog(
+        items: items,
+        onConfirm: _handleGlobalSignConfirm,
+        onDeleteItem: _deleteGlobalSignItem,
+      ),
     );
   }
 
@@ -918,20 +955,7 @@ class _HomePageState extends State<HomePage> {
           );
           widget.onDailyNoteSaved?.call(savedPath);
           dailyHandledByAi = true;
-          try {
-            final nextOverview = await widget.homeOverviewService
-                .mergeAndSaveOverview(
-                  appDataDir: appDataDir,
-                  date: now,
-                  current: _overview,
-                  incoming: aiStructured,
-                );
-            if (mounted) {
-              setState(() => _overview = nextOverview);
-            }
-          } catch (_) {
-            // Overview JSON is a UI cache; ignore write failures here.
-          }
+          await _loadTodayOverview();
         } catch (_) {
           dailyHandledByAi = false;
         }
@@ -1056,6 +1080,7 @@ class _HomePageState extends State<HomePage> {
           language: language,
         );
         widget.onDailyNoteSaved?.call(savedPath);
+        await _loadTodayOverview();
       } catch (_) {
         // 日报写入失败时仍展示提示。
       }
@@ -2217,7 +2242,9 @@ class _AttachmentChip extends StatelessWidget {
             const SizedBox(width: 6),
             Flexible(
               child: Text(
-                l10n(context).homeAttachmentChipLabel(attachment.name, typeLabel),
+                l10n(
+                  context,
+                ).homeAttachmentChipLabel(attachment.name, typeLabel),
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: colors.textMuted,
@@ -3196,8 +3223,9 @@ class _UpdateNoticeBannerState extends State<_UpdateNoticeBanner> {
     final latest = widget.result.latest;
     final colors = AppTheme.colors(context);
     final message = switch (widget.result.status) {
-      UpdateCheckStatus.updateAvailable =>
-        l10n(context).homeUpdateAvailable(latest?.version ?? ''),
+      UpdateCheckStatus.updateAvailable => l10n(
+        context,
+      ).homeUpdateAvailable(latest?.version ?? ''),
       UpdateCheckStatus.failed => l10n(context).homeUpdateCheckFailed,
       UpdateCheckStatus.idle => '',
     };
@@ -3496,8 +3524,9 @@ class _HomeMoreMenuItem extends StatelessWidget {
                           label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: contentColor),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(color: contentColor),
                         ),
                       ),
                     ],

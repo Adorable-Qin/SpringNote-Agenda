@@ -15,7 +15,7 @@ class IndexedNoteService extends NoteService {
   }) async {
     final result = await rust_api.listIndexedNotes(
       directoryPath: directoryPath,
-      kind: kind.name,
+      kind: kind.directoryName,
     );
     if (!result.ok) {
       return super.listMarkdownFiles(directoryPath: directoryPath, kind: kind);
@@ -61,7 +61,7 @@ class IndexedNoteService extends NoteService {
   }) async {
     final result = await rust_api.refreshNoteIndex(
       directoryPath: directoryPath,
-      kind: kind.name,
+      kind: kind.directoryName,
     );
     return result.ok && (result.indexedCount > 0 || result.removedCount > 0);
   }
@@ -74,7 +74,7 @@ class IndexedNoteService extends NoteService {
   }) async {
     await rust_api.indexNoteFile(
       directoryPath: directoryPath,
-      kind: kind.name,
+      kind: kind.directoryName,
       notePath: notePath,
     );
   }
@@ -87,7 +87,7 @@ class IndexedNoteService extends NoteService {
   }) async {
     final result = await rust_api.searchIndexedNotes(
       directoryPath: directoryPath,
-      kind: kind.name,
+      kind: kind.directoryName,
       query: query,
     );
     if (!result.ok) {

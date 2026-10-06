@@ -54,8 +54,9 @@ class NoteService {
     final date = now ?? DateTime.now();
     final name = switch (kind) {
       NoteKind.daily => _formatDate(date),
-      NoteKind.weekly => _formatIsoWeek(date),
-      NoteKind.monthly =>
+      NoteKind.weekly || NoteKind.weeklyPlan => _formatIsoWeek(date),
+      NoteKind.biweekly => throw ArgumentError('Select two weekly reports'),
+      NoteKind.monthly || NoteKind.monthlyPlan =>
         '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}',
     };
     final path = _join(directoryPath, '$name.md');
@@ -84,6 +85,108 @@ class NoteService {
     return file.readAsString();
   }
 
+  Future<void> deleteMarkdown(NoteFile note) async {
+    await NoteStorageCoordinator.runForManagedNotePath(note.path, () async {
+      final file = File(note.path);
+      if (await file.exists()) {
+        if (note.kind == NoteKind.weekly || note.kind == NoteKind.monthly) {
+          await File('${note.path}.deleted').writeAsString('');
+        }
+        await file.delete();
+      }
+    });
+    await refreshMarkdownIndex(
+      directoryPath: File(note.path).parent.path,
+      kind: note.kind,
+    );
+  }
+
+  /// Keeps the two source reports intact and never overwrites an edited merge.
+  Future<NoteFile> mergeWeeklyReports({
+    required String directoryPath,
+    required List<NoteFile> sources,
+    bool english = false,
+  }) async {
+    if (sources.length != 2 ||
+        sources.any((n) => n.kind != NoteKind.weekly) ||
+        sources[0].path == sources[1].path ||
+        sources[0].name == sources[1].name) {
+      throw ArgumentError('Select two distinct weekly reports');
+    }
+    final sorted = [...sources]..sort((a, b) => a.name.compareTo(b.name));
+    final stems = sorted
+        .map((n) => n.name.replaceFirst(RegExp(r'\.md$'), ''))
+        .toList();
+    if (stems.any((s) => !RegExp(r'^\d{4}-W\d{2}$').hasMatch(s))) {
+      throw ArgumentError('Weekly reports must have ISO week filenames');
+    }
+    final name = '${stems[0]}_${stems[1]}';
+    final path = _join(directoryPath, '$name.md');
+    final title = '$name ${english ? 'Biweekly report' : '双周报'}';
+    final sections = <String>[];
+    for (final source in sorted) {
+      final content = await readMarkdown(source.path);
+      sections.add(_nestReportHeadings(content));
+    }
+    await NoteStorageCoordinator.runForManagedNotePath(path, () async {
+      final file = File(path);
+      if (!await file.exists()) {
+        await file.parent.create(recursive: true);
+        await file.writeAsString(
+          '# $title\n\n${sections.join('\n\n---\n\n')}\n',
+        );
+      }
+    });
+    await indexMarkdownFile(
+      directoryPath: directoryPath,
+      kind: NoteKind.biweekly,
+      notePath: path,
+    );
+    return describeMarkdown(
+      note: NoteFile(
+        path: path,
+        name: '$name.md',
+        title: title,
+        modifiedAt: DateTime.now(),
+        kind: NoteKind.biweekly,
+      ),
+      content: await readMarkdown(path),
+    );
+  }
+
+  String _nestReportHeadings(String content) {
+    String? fence;
+    var fenceLength = 0;
+    return content
+        .split('\n')
+        .map((line) {
+          final marker = RegExp(
+            r'^ {0,3}(`{3,}|~{3,})',
+          ).firstMatch(line)?.group(1);
+          if (marker != null) {
+            if (fence == null) {
+              fence = marker[0];
+              fenceLength = marker.length;
+            } else if (marker[0] == fence &&
+                marker.length >= fenceLength &&
+                line
+                    .substring(line.indexOf(marker) + marker.length)
+                    .trim()
+                    .isEmpty) {
+              fence = null;
+            }
+            return line;
+          }
+          return fence == null
+              ? line.replaceFirstMapped(
+                  RegExp(r'^(#{1,5}) '),
+                  (match) => '#${match[1]} ',
+                )
+              : line;
+        })
+        .join('\n');
+  }
+
   Future<void> writeMarkdown(String path, String content) async {
     await NoteStorageCoordinator.runForManagedNotePath(path, () async {
       final file = File(path);
@@ -92,6 +195,28 @@ class NoteService {
         await parent.create(recursive: true);
       }
       await file.writeAsString(content);
+      final deletionMarker = File('$path.deleted');
+      if (await deletionMarker.exists()) await deletionMarker.delete();
+    });
+  }
+
+  /// Startup generation must not bring back a manually deleted report, or
+  /// overwrite a report edited while the model was producing its response.
+  Future<bool> writeGeneratedReport(String path, String content) {
+    return NoteStorageCoordinator.runForManagedNotePath(path, () async {
+      if (await File('$path.deleted').exists()) return false;
+      final file = File(path);
+      if (await file.exists()) {
+        final lines = (await file.readAsString()).split(RegExp(r'\r?\n'));
+        if (lines.any(
+          (line) => line.trim().isNotEmpty && !line.trimLeft().startsWith('#'),
+        )) {
+          return false;
+        }
+      }
+      await file.parent.create(recursive: true);
+      await file.writeAsString(content);
+      return true;
     });
   }
 

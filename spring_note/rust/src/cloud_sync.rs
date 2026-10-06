@@ -1119,6 +1119,12 @@ fn local_directory_for(request: &CloudSyncRequest, kind: NoteKind) -> PathBuf {
         NoteKind::Daily => PathBuf::from(&request.daily_notes_directory),
         NoteKind::Weekly => PathBuf::from(&request.weekly_notes_directory),
         NoteKind::Monthly => PathBuf::from(&request.monthly_notes_directory),
+        NoteKind::Biweekly | NoteKind::MonthlyPlan | NoteKind::WeeklyPlan => {
+            PathBuf::from(&request.daily_notes_directory)
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .join(kind.directory_name())
+        }
         NoteKind::Images => shared_images_directory(&request.daily_notes_directory),
     }
 }
@@ -1131,6 +1137,12 @@ fn local_directory_for_note_upload(
         NoteKind::Daily => PathBuf::from(&request.daily_notes_directory),
         NoteKind::Weekly => PathBuf::from(&request.weekly_notes_directory),
         NoteKind::Monthly => PathBuf::from(&request.monthly_notes_directory),
+        NoteKind::Biweekly | NoteKind::MonthlyPlan | NoteKind::WeeklyPlan => {
+            PathBuf::from(&request.daily_notes_directory)
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .join(kind.directory_name())
+        }
         NoteKind::Images => shared_images_directory(&request.daily_notes_directory),
     }
 }
@@ -1416,15 +1428,21 @@ enum NoteKind {
     Daily,
     Weekly,
     Monthly,
+    Biweekly,
+    MonthlyPlan,
+    WeeklyPlan,
     Images,
 }
 
 impl NoteKind {
-    fn all() -> [NoteKind; 4] {
+    fn all() -> [NoteKind; 7] {
         [
             NoteKind::Daily,
             NoteKind::Weekly,
             NoteKind::Monthly,
+            NoteKind::Biweekly,
+            NoteKind::MonthlyPlan,
+            NoteKind::WeeklyPlan,
             NoteKind::Images,
         ]
     }
@@ -1434,6 +1452,9 @@ impl NoteKind {
             NoteKind::Daily => "daily",
             NoteKind::Weekly => "weekly",
             NoteKind::Monthly => "monthly",
+            NoteKind::Biweekly => "biweekly",
+            NoteKind::MonthlyPlan => "monthly_plan",
+            NoteKind::WeeklyPlan => "weekly_plan",
             NoteKind::Images => "images",
         }
     }
@@ -2103,6 +2124,47 @@ mod tests {
 
         assert!(client.has_directory("/dav/SpringNote/"));
         assert!(client.has_directory("/dav/SpringNote/notes/"));
+    }
+
+    #[tokio::test]
+    async fn syncs_work_plans_and_biweekly_reports() {
+        let dir = TestDir::new("spring_note_plan_sync");
+        let request = request(&dir.path);
+        let client = MemoryWebDavClient::default();
+        for kind in [
+            NoteKind::Biweekly,
+            NoteKind::MonthlyPlan,
+            NoteKind::WeeklyPlan,
+        ] {
+            let local = local_directory_for(&request, kind);
+            fs::create_dir_all(&local).unwrap();
+            fs::write(local.join("local.md"), "# Local plan").unwrap();
+            client.put_text(
+                &format!("/dav/SpringNote/notes/{}/remote.md", kind.directory_name()),
+                "# Remote plan",
+            );
+        }
+        let result = sync_with_client(&client, request.clone()).await.unwrap();
+        assert!(result.ok);
+        assert_eq!(result.uploaded, 3);
+        assert_eq!(result.downloaded, 3);
+        for kind in [
+            NoteKind::Biweekly,
+            NoteKind::MonthlyPlan,
+            NoteKind::WeeklyPlan,
+        ] {
+            assert_eq!(
+                fs::read_to_string(local_directory_for(&request, kind).join("remote.md")).unwrap(),
+                "# Remote plan"
+            );
+            assert_eq!(
+                client.text(&format!(
+                    "/dav/SpringNote/notes/{}/local.md",
+                    kind.directory_name()
+                )),
+                Some("# Local plan".to_string())
+            );
+        }
     }
 
     #[tokio::test]

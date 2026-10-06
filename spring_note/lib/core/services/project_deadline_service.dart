@@ -32,6 +32,8 @@ class ProjectDeadlineService {
       (directory: localDataState.dailyNotesDirectory, kind: NoteKind.daily),
       (directory: localDataState.weeklyNotesDirectory, kind: NoteKind.weekly),
       (directory: localDataState.monthlyNotesDirectory, kind: NoteKind.monthly),
+      for (final kind in [NoteKind.weeklyPlan, NoteKind.monthlyPlan])
+        (directory: localDataState.directoryFor(kind), kind: kind),
     ]) {
       final notes = await noteService.listMarkdownFiles(
         directoryPath: source.directory,
@@ -68,11 +70,14 @@ class ProjectDeadlineService {
     for (var index = 0; index < lines.length; index++) {
       final line = lines[index];
       final labelMatch = _deadlineLabel.firstMatch(line);
-      if (labelMatch == null) {
+      final isPlan =
+          note.kind == NoteKind.weeklyPlan || note.kind == NoteKind.monthlyPlan;
+      if (labelMatch == null && (!isPlan || line.trimLeft().startsWith('#'))) {
         continue;
       }
+      final dateOffset = labelMatch?.end ?? 0;
       final parsedDate = _findDate(
-        line.substring(labelMatch.end),
+        line.substring(dateOffset),
         reference: reference,
       );
       if (parsedDate == null) {
@@ -80,8 +85,8 @@ class ProjectDeadlineService {
       }
       final summary = _summaryFromLine(
         line,
-        labelStart: labelMatch.start,
-        dateEnd: labelMatch.end + parsedDate.end,
+        labelStart: labelMatch?.start ?? parsedDate.start,
+        dateEnd: dateOffset + parsedDate.end,
         fallback: note.title,
       );
       final identity =
@@ -168,6 +173,8 @@ class ProjectDeadlineService {
           }
         }
         break;
+      case NoteKind.biweekly:
+      case NoteKind.weeklyPlan:
       case NoteKind.weekly:
         final match = RegExp(
           r'^(\d{4})-W(\d{1,2})$',
@@ -183,6 +190,7 @@ class ProjectDeadlineService {
           }
         }
         break;
+      case NoteKind.monthlyPlan:
       case NoteKind.monthly:
         final match = RegExp(r'^(\d{4})-(\d{1,2})$').firstMatch(stem);
         if (match != null) {

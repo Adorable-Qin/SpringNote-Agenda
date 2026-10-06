@@ -106,6 +106,9 @@ class _ProjectCalendarPageState extends State<ProjectCalendarPage> {
       title: strings.title,
       actions: [
         TextButton.icon(
+          style: TextButton.styleFrom(
+            textStyle: const TextStyle(decoration: TextDecoration.none),
+          ),
           onPressed: _showToday,
           icon: const Icon(Icons.today_outlined, size: 17),
           label: Text(strings.today),
@@ -798,6 +801,9 @@ class _CalendarStrings {
     NoteKind.daily => english ? 'Daily note' : '日报',
     NoteKind.weekly => english ? 'Weekly note' : '周报',
     NoteKind.monthly => english ? 'Monthly note' : '月报',
+    NoteKind.biweekly => english ? 'Biweekly report' : '双周报',
+    NoteKind.monthlyPlan => english ? 'Monthly plan' : '月度计划',
+    NoteKind.weeklyPlan => english ? 'Weekly plan' : '周计划',
   };
 
   static const _englishMonths = [

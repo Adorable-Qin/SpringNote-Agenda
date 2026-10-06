@@ -6,6 +6,19 @@ import 'package:spring_note/core/services/cloud_sync_service.dart';
 import 'package:spring_note/core/services/note_upload_queue.dart';
 
 void main() {
+  test('deleting a note during a failed upload does not requeue it', () async {
+    late NoteUploadQueue queue;
+    final service = _FakeCloudSyncService(
+      onUpload: (path) {
+        queue.forget(path);
+        throw StateError('Deleted while uploading');
+      },
+    );
+    queue = NoteUploadQueue(cloudSyncService: service)..attach(_state);
+    queue.markDirty(r'D:\Temp\SpringNote\notes\daily\2026-06-29.md');
+    await queue.flush();
+    expect(queue.hasPendingUploads, isFalse);
+  });
   test('deduplicates repeated dirty marks for the same note', () async {
     final service = _FakeCloudSyncService();
     final queue = NoteUploadQueue(cloudSyncService: service)..attach(_state);
