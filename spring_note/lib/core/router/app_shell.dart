@@ -6,6 +6,7 @@ import '../../features/calendar/project_calendar_page.dart';
 import '../../features/home/home_page.dart';
 import '../../features/memory/memory_page.dart';
 import '../../features/notes/notes_page.dart';
+import '../../features/plans/work_plans_page.dart';
 import '../../features/settings/settings_page.dart';
 import '../models/app_config.dart';
 import '../models/local_data_state.dart';
@@ -26,7 +27,7 @@ import '../theme/app_theme.dart';
 import '../widgets/wallpaper_layer.dart';
 import '../../l10n/l10n.dart';
 
-enum AppSection { home, notes, calendar, memory, settings }
+enum AppSection { home, notes, calendar, plans, memory, settings }
 
 enum _StartupCloudSyncFailureKind { offline, temporary, permanent }
 
@@ -522,6 +523,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                             externalNoteUpdate: _noteExternalUpdate,
                             onNoteSaved: _notifyNoteSaved,
                           ),
+                          WorkPlansPage(
+                            localDataState: _localDataState,
+                            externalNoteUpdate: _noteExternalUpdate,
+                            onNoteSaved: (note) {
+                              _noteUploadQueue.markDirty(note.path);
+                              _notifyNoteSaved(note.kind, note.path);
+                            },
+                          ),
                           MemoryPage(localDataState: _localDataState),
                           SettingsPage(
                             localDataState: _localDataState,
@@ -642,6 +651,15 @@ class GlobalSidebar extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           _SidebarButton(
+            icon: _SidebarIconType.clipboard,
+            semanticLabel: currentAppLanguage(context) == 'en'
+                ? 'Work plans'
+                : '工作计划',
+            selected: selectedSection == AppSection.plans,
+            onPressed: () => onSectionSelected(AppSection.plans),
+          ),
+          const SizedBox(height: 8),
+          _SidebarButton(
             icon: _SidebarIconType.bookOpen,
             semanticLabel: l10n(context).coreSidebarMemoryLabel,
             selected: selectedSection == AppSection.memory,
@@ -758,6 +776,7 @@ IconData _legacyMaterialIcon(_SidebarIconType icon) {
     _SidebarIconType.calendarDays => Icons.calendar_month_outlined,
     _SidebarIconType.bookOpen => Icons.menu_book_outlined,
     _SidebarIconType.settings => Icons.settings_outlined,
+    _SidebarIconType.clipboard => Icons.assignment_outlined,
   };
 }
 
@@ -766,6 +785,7 @@ enum _SidebarIconType {
   stickyNote,
   calendarDays,
   bookOpen,
+  clipboard,
   settings,
 }
 
@@ -881,6 +901,12 @@ class _SidebarLucidePainter extends CustomPainter {
           ..cubicTo(12 * sx, 19.35 * sy, 10.65 * sx, 18 * sy, 9 * sx, 18 * sy)
           ..lineTo(3 * sx, 18 * sy);
         canvas.drawPath(bookPath, paint);
+        break;
+      case _SidebarIconType.clipboard:
+        canvas.drawRRect(roundedRect(4, 4, 16, 18, 2), paint);
+        canvas.drawRRect(roundedRect(8, 2, 8, 4, 1), paint);
+        canvas.drawLine(point(8, 11), point(16, 11), paint);
+        canvas.drawLine(point(8, 16), point(16, 16), paint);
         break;
       case _SidebarIconType.settings:
         final settingsPath = Path()

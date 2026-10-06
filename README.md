@@ -123,7 +123,17 @@ We use **DeepSeek** as an example:
 
 ![Notebook](./snapshots/note.png)
 
-Notebook search only searches within the currently selected note type (daily, weekly, or monthly). Enter at least two characters to search; click a result to open its full content.
+Click **New** in the notebook and choose a date to create a daily, weekly, or monthly note. Existing notes for that period are opened directly. Right-click a note to delete it after confirmation. Manually deleted weekly and monthly reports are excluded from automatic startup generation.
+
+Under **Settings → Preferences → Work cycle**, choose weekly or biweekly meetings. Biweekly meetings enable a **Biweekly report** type: select two weekly reports to create an editable combined report. Source reports are preserved, and merging the same pair again opens the existing result. Switching back to weekly meetings preserves saved biweekly reports.
+
+Notebook search searches the selected note type. Enter at least two characters to search.
+
+### Work plans
+
+Open **Work plans** from the sidebar. Monthly cards on the left keep each month's summary and next month's plan together. The editable weekly board on the right lets you switch between saved weeks. Each side has a **New** button and saves edits automatically.
+
+Dated tasks in plans, such as `- [ ] 2026-10-09 Finish proposal` or `- [ ] Finish proposal — Due: 2026-10-09`, appear automatically in the project calendar. Date changes, removed tasks, and completion updates are reflected in the plans and calendar.
 
 ### Step 5: Use Memories
 

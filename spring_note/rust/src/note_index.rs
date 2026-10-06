@@ -933,7 +933,7 @@ fn validate_note_path(directory: &Path, note_path: &str) -> Result<PathBuf, Inde
 
 fn validate_kind(kind: &str) -> Result<(), IndexError> {
     match kind {
-        "daily" | "weekly" | "monthly" => Ok(()),
+        "daily" | "weekly" | "monthly" | "biweekly" | "weekly_plan" | "monthly_plan" => Ok(()),
         _ => Err(IndexError::Validation("未知的便签类型".to_owned())),
     }
 }
@@ -1109,6 +1109,25 @@ mod tests {
         assert!(loaded.ok, "{}", loaded.error_message);
         assert!(loaded.content.contains("Rust 全文搜索"));
 
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn indexes_and_removes_work_plans_and_biweekly_reports() {
+        let root = temp_root();
+        for kind in ["biweekly", "weekly_plan", "monthly_plan"] {
+            let directory = root.join("notes").join(kind);
+            fs::create_dir_all(&directory).unwrap();
+            let note = directory.join("2026-10.md");
+            fs::write(&note, "# 工作计划\n\n交付方案\n").unwrap();
+            assert!(refresh(directory.to_str().unwrap(), kind).ok);
+            let found = search(directory.to_str().unwrap(), kind, "交付方案");
+            assert!(found.ok);
+            assert_eq!(found.notes.len(), 1);
+            fs::remove_file(&note).unwrap();
+            assert!(refresh(directory.to_str().unwrap(), kind).ok);
+            assert!(list(directory.to_str().unwrap(), kind).notes.is_empty());
+        }
         fs::remove_dir_all(root).unwrap();
     }
 

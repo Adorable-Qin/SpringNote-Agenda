@@ -798,6 +798,9 @@ class _CalendarStrings {
     NoteKind.daily => english ? 'Daily note' : '日报',
     NoteKind.weekly => english ? 'Weekly note' : '周报',
     NoteKind.monthly => english ? 'Monthly note' : '月报',
+    NoteKind.biweekly => english ? 'Biweekly report' : '双周报',
+    NoteKind.monthlyPlan => english ? 'Monthly plan' : '月度计划',
+    NoteKind.weeklyPlan => english ? 'Weekly plan' : '周计划',
   };
 
   static const _englishMonths = [

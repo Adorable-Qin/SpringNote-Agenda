@@ -8,6 +8,8 @@ import 'wallpaper_settings.dart';
 
 enum AppThemePreference { system, light, dark }
 
+enum WorkReportCycle { weekly, biweekly }
+
 const defaultDailyMergePrompt = '''你是 SpringNote-Agenda 的日报整理助手。
 你的任务是根据已有日报和新增随手记录，整理生成一篇自然、真实、便于继续编辑的日报。
 
@@ -146,6 +148,7 @@ String defaultWeeklyReportPromptFor(String language) {
 
 class AppConfig {
   const AppConfig({
+    this.workReportCycle = WorkReportCycle.weekly,
     required this.wallpaperSettings,
     required this.appFont,
     required this.fontScale,
@@ -177,6 +180,7 @@ class AppConfig {
   });
 
   final WallpaperSettings wallpaperSettings;
+  final WorkReportCycle workReportCycle;
 
   final String appFont;
   final double fontScale;
@@ -263,6 +267,9 @@ class AppConfig {
   factory AppConfig.fromJson(Map<String, Object?> json) {
     final language = resolveAppLanguage(_readLanguage(json['language']));
     return AppConfig(
+      workReportCycle: json['workReportCycle'] == 'biweekly'
+          ? WorkReportCycle.biweekly
+          : WorkReportCycle.weekly,
       wallpaperSettings: json['wallpaperSettings'] != null
           ? WallpaperSettings.fromJson(
               (json['wallpaperSettings'] as Map).cast<String, dynamic>(),
@@ -335,6 +342,7 @@ class AppConfig {
 
   Map<String, Object?> toJson() {
     return {
+      'workReportCycle': workReportCycle.name,
       'wallpaperSettings': wallpaperSettings.toJson(),
       'appFont': appFont,
       'fontScale': fontScale,
@@ -369,6 +377,7 @@ class AppConfig {
   }
 
   AppConfig copyWith({
+    WorkReportCycle? workReportCycle,
     WallpaperSettings? wallpaperSettings,
     String? appFont,
     double? fontScale,
@@ -402,6 +411,7 @@ class AppConfig {
     final nextCloseToTray =
         nextShowTrayIcon && (closeToTray ?? this.closeToTray);
     return AppConfig(
+      workReportCycle: workReportCycle ?? this.workReportCycle,
       wallpaperSettings: wallpaperSettings ?? this.wallpaperSettings,
       appFont: appFont ?? this.appFont,
       fontScale: fontScale ?? this.fontScale,

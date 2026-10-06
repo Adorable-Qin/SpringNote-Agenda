@@ -63,7 +63,8 @@ class StartupReportGenerationService {
     final label = _formatIsoWeek(weekStart);
     final targetPath = _join(localDataState.weeklyNotesDirectory, '$label.md');
 
-    if (await _hasMeaningfulFile(targetPath)) {
+    if (await File('$targetPath.deleted').exists() ||
+        await _hasMeaningfulFile(targetPath)) {
       return null;
     }
 
@@ -86,7 +87,9 @@ class StartupReportGenerationService {
       return null;
     }
 
-    await noteService.writeMarkdown(targetPath, markdown);
+    if (!await noteService.writeGeneratedReport(targetPath, markdown)) {
+      return null;
+    }
     return GeneratedReport(kind: NoteKind.weekly, path: targetPath);
   }
 
@@ -97,7 +100,8 @@ class StartupReportGenerationService {
     final label = _formatMonth(month);
     final targetPath = _join(localDataState.monthlyNotesDirectory, '$label.md');
 
-    if (await _hasMeaningfulFile(targetPath)) {
+    if (await File('$targetPath.deleted').exists() ||
+        await _hasMeaningfulFile(targetPath)) {
       return null;
     }
 
@@ -118,7 +122,9 @@ class StartupReportGenerationService {
       return null;
     }
 
-    await noteService.writeMarkdown(targetPath, markdown);
+    if (!await noteService.writeGeneratedReport(targetPath, markdown)) {
+      return null;
+    }
     return GeneratedReport(kind: NoteKind.monthly, path: targetPath);
   }
 

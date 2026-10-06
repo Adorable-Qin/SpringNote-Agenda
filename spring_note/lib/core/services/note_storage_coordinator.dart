@@ -46,7 +46,14 @@ class NoteStorageCoordinator {
   static String? _dataDirectoryFromManagedNotePath(String notePath) {
     final normalized = _normalizePath(notePath);
     final lower = normalized.toLowerCase();
-    for (final directory in const ['daily', 'weekly', 'monthly']) {
+    for (final directory in const [
+      'daily',
+      'weekly',
+      'monthly',
+      'biweekly',
+      'weekly_plan',
+      'monthly_plan',
+    ]) {
       final marker = '/notes/$directory/';
       final index = lower.lastIndexOf(marker);
       if (index < 0 || index + marker.length >= normalized.length) {

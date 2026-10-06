@@ -24,6 +24,7 @@ class NoteUploadQueue {
 
   final CloudSyncService cloudSyncService;
   final LinkedHashMap<String, String> _pendingPaths = LinkedHashMap();
+  final Set<String> _forgottenPaths = {};
 
   LocalDataState? _localDataState;
   Future<NoteUploadFlushResult>? _activeFlush;
@@ -36,6 +37,7 @@ class NoteUploadQueue {
     if (previousDirectory != null &&
         _pathKey(previousDirectory) != _pathKey(localDataState.dataDirectory)) {
       _pendingPaths.clear();
+      _forgottenPaths.clear();
     }
   }
 
@@ -44,7 +46,14 @@ class NoteUploadQueue {
     if (trimmed.isEmpty) {
       return;
     }
+    _forgottenPaths.remove(_pathKey(trimmed));
     _pendingPaths[_pathKey(trimmed)] = trimmed;
+  }
+
+  void forget(String notePath) {
+    final key = _pathKey(notePath);
+    _pendingPaths.remove(key);
+    _forgottenPaths.add(key);
   }
 
   /// 立即尝试上传所有待同步的笔记。
@@ -73,7 +82,9 @@ class NoteUploadQueue {
     return flushFuture;
   }
 
-  Future<NoteUploadFlushResult> _flushPending(String? autoSyncFailedMessage) async {
+  Future<NoteUploadFlushResult> _flushPending(
+    String? autoSyncFailedMessage,
+  ) async {
     final localDataState = _localDataState;
     if (localDataState == null || !_autoCloudSyncAvailable(localDataState)) {
       return NoteUploadFlushResult.idle;
@@ -105,6 +116,7 @@ class NoteUploadQueue {
           notePath: entry.value,
         );
       } catch (_) {
+        if (_forgottenPaths.contains(entry.key)) continue;
         _pendingPaths[entry.key] = entry.value;
         return NoteUploadFlushResult(
           ok: false,
@@ -115,6 +127,7 @@ class NoteUploadQueue {
       }
 
       if (!result.ok) {
+        if (_forgottenPaths.contains(entry.key)) continue;
         _pendingPaths[entry.key] = entry.value;
         return NoteUploadFlushResult(
           ok: false,
