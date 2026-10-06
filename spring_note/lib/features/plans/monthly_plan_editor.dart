@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/theme/app_theme.dart';
 
 import 'plan_markdown_document.dart';
 import 'plan_markdown_editor.dart';
@@ -121,13 +122,56 @@ class _MonthlyPlanEditorState extends State<MonthlyPlanEditor> {
     widget.onChanged(content);
   }
 
-  Widget _section(String key, String title, TextEditingController controller) =>
-      Column(
-        key: ValueKey(key),
+  Widget _section(String key, String title, TextEditingController controller) {
+    final colors = AppTheme.colors(context);
+    final planning = key == 'monthly-plan';
+    final accent = Theme.of(context).colorScheme.primary;
+    return Container(
+      key: ValueKey(key),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: planning
+                      ? accent.withValues(alpha: 0.10)
+                      : colors.surfaceMuted,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  planning ? Icons.flag_outlined : Icons.fact_check_outlined,
+                  size: 19,
+                  color: planning ? accent : colors.textMuted,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: colors.text,
+                    height: 1.4,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Divider(height: 1, color: colors.divider),
+          ),
           PlanMarkdownEditor(
             controller: controller,
             onChanged: _save,
@@ -135,7 +179,9 @@ class _MonthlyPlanEditorState extends State<MonthlyPlanEditor> {
             english: widget.english,
           ),
         ],
-      );
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => Column(
@@ -147,14 +193,14 @@ class _MonthlyPlanEditorState extends State<MonthlyPlanEditor> {
           widget.english ? 'Additional notes' : '补充内容',
           _intro,
         ),
-        const Divider(height: 28),
+        const SizedBox(height: 16),
       ],
       _section(
         'monthly-summary',
         widget.english ? 'This month’s summary' : '本月度工作总结',
         _summary,
       ),
-      const Divider(height: 28),
+      const SizedBox(height: 16),
       _section(
         'monthly-plan',
         widget.english ? 'Next month’s plan' : '下月度工作计划',

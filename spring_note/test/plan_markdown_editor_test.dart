@@ -32,6 +32,17 @@ void main() {
     expect(find.text('本月度工作总结'), findsOneWidget);
     expect(find.text('下月度工作计划'), findsOneWidget);
     final summary = find.byKey(const ValueKey('monthly-summary'));
+    final toolbar = find.byKey(const ValueKey('plan-editor-toolbar'));
+    expect(toolbar, findsNothing);
+    await tester.tap(find.text('完成方案', findRichText: true));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: summary, matching: toolbar), findsOneWidget);
+    await tester.tap(find.byTooltip('加粗'));
+    await tester.pumpAndSettle();
+    expect(toolbar, findsOneWidget);
+    // Restore before checking exact preservation of existing section content.
+    await tester.tap(find.byTooltip('撤销'));
+    await tester.pumpAndSettle();
     await tester.tap(
       find.descendant(
         of: summary,
@@ -48,6 +59,18 @@ void main() {
     await tester.pump();
     expect(saved, contains('## 本月度工作总结\n\n完成修订\n\n## 下月度工作计划'));
     expect(saved, contains('- [ ] 截止：2026-11-05 交付'));
+    final planBody = find.text('截止：2026-11-05 交付', findRichText: true);
+    await tester.ensureVisible(planBody);
+    await tester.tap(planBody);
+    await tester.pumpAndSettle();
+    expect(toolbar, findsOneWidget);
+    expect(find.descendant(of: summary, matching: toolbar), findsNothing);
+    expect(find.byKey(const ValueKey('plan-source-editor')), findsNothing);
+    await tester.ensureVisible(find.text('完成修订', findRichText: true));
+    await tester.tap(find.text('完成修订', findRichText: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('plan-editor-mode')));
+    await tester.pumpAndSettle();
     controller.text = '# 2026-10\n\n旧版自由正文';
     await tester.pumpAndSettle();
     expect(tester.widget<TextField>(field).controller!.text, '旧版自由正文');
@@ -128,6 +151,9 @@ void main() {
       var saves = 0;
       await pumpEditor(tester, controller, (_) => saves++);
       expect(saves, 0);
+      expect(find.byKey(const ValueKey('plan-editor-toolbar')), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('plan-block-0')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('plan-editor-mode')));
       await tester.pumpAndSettle();
       expect(controller.text, original);
@@ -161,6 +187,8 @@ void main() {
     await tester.tap(find.byType(Checkbox));
     await tester.pumpAndSettle();
     expect(saved, '- [x] 截止：2026-10-14 交付\n');
+    await tester.tap(find.text('截止：2026-10-14 交付', findRichText: true));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('plan-editor-mode')));
     await tester.pumpAndSettle();
     await tester.enterText(

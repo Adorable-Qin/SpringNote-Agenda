@@ -29,6 +29,9 @@ class PlanMarkdownEditor extends StatefulWidget {
 class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
   final _input = _PlanBlockController();
   final _focus = FocusNode();
+  final _regionFocus = FocusNode();
+  final _sourceFocus = FocusNode();
+  bool _editing = false;
   final _activeBlockKey = GlobalKey();
   final _undo = <String>[];
   final _redo = <String>[];
@@ -42,7 +45,6 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
   void initState() {
     super.initState();
     widget.controller.addListener(_externalChange);
-    _focus.addListener(_focusChanged);
   }
 
   @override
@@ -66,17 +68,23 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
     });
   }
 
-  void _focusChanged() {
-    if (!_focus.hasFocus && mounted && _start != null) {
-      setState(() => _start = null);
-    }
+  void _editingChanged(bool focused) {
+    if (!mounted) return;
+    setState(() {
+      _editing = focused;
+      if (!focused) {
+        _start = null;
+        _source = false;
+      }
+    });
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_externalChange);
-    _focus.removeListener(_focusChanged);
     _focus.dispose();
+    _regionFocus.dispose();
+    _sourceFocus.dispose();
     _input.dispose();
     super.dispose();
   }
@@ -97,6 +105,7 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
 
   void _activate(PlanMarkdownBlock block) {
     setState(() {
+      _editing = true;
       _start = block.start;
       _end = block.end;
       _prefix = block.prefix;
@@ -235,7 +244,7 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
     if (from.isEmpty) return;
     (redo ? _undo : _redo).add(widget.controller.text);
     _start = null;
-    _focus.unfocus();
+    _regionFocus.requestFocus();
     _publish(from.removeLast(), remember: false);
   }
 
@@ -411,105 +420,122 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
   @override
   Widget build(BuildContext context) {
     final english = widget.english;
-    return TextFieldTapRegion(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 2,
-            crossAxisAlignment: WrapCrossAlignment.center,
+    return TapRegion(
+      onTapOutside: (_) => _regionFocus.unfocus(),
+      child: Focus(
+        focusNode: _regionFocus,
+        onFocusChange: _editingChanged,
+        child: TextFieldTapRegion(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextButton.icon(
-                style: TextButton.styleFrom(
-                  textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    decoration: TextDecoration.none,
+              if (_editing)
+                Wrap(
+                  key: const ValueKey('plan-editor-toolbar'),
+                  spacing: 2,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        textStyle: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(decoration: TextDecoration.none),
+                      ),
+                      key: const ValueKey('plan-editor-mode'),
+                      onPressed: () {
+                        _regionFocus.requestFocus();
+                        setState(() {
+                          _source = !_source;
+                          _start = null;
+                        });
+                        if (_source) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted && _source) _sourceFocus.requestFocus();
+                          });
+                        }
+                      },
+                      icon: Icon(
+                        _source ? Icons.edit_note : Icons.code,
+                        size: 18,
+                      ),
+                      label: Text(
+                        _source
+                            ? (english ? 'Live edit' : '实时编辑')
+                            : (english ? 'Source' : '源码'),
+                      ),
+                    ),
+                    if (!_source) ...[
+                      IconButton(
+                        tooltip: english ? 'Heading' : '标题',
+                        onPressed: () => _changePrefix('## '),
+                        icon: const Icon(Icons.title, size: 18),
+                      ),
+                      IconButton(
+                        tooltip: english ? 'Bold' : '加粗',
+                        onPressed: () => _wrap('**'),
+                        icon: const Icon(Icons.format_bold, size: 18),
+                      ),
+                      IconButton(
+                        tooltip: english ? 'Italic' : '斜体',
+                        onPressed: () => _wrap('*'),
+                        icon: const Icon(Icons.format_italic, size: 18),
+                      ),
+                      IconButton(
+                        tooltip: english ? 'List' : '列表',
+                        onPressed: () => _changePrefix('- '),
+                        icon: const Icon(Icons.format_list_bulleted, size: 18),
+                      ),
+                      IconButton(
+                        tooltip: english ? 'Task' : '待办',
+                        onPressed: () => _changePrefix('- [ ] '),
+                        icon: const Icon(Icons.check_box_outlined, size: 18),
+                      ),
+                      IconButton(
+                        tooltip: english ? 'Paragraph' : '正文',
+                        onPressed: () => _changePrefix(''),
+                        icon: const Icon(Icons.notes, size: 18),
+                      ),
+                      IconButton(
+                        tooltip: english ? 'Undo' : '撤销',
+                        onPressed: _undo.isEmpty ? null : () => _history(false),
+                        icon: const Icon(Icons.undo, size: 18),
+                      ),
+                      IconButton(
+                        tooltip: english ? 'Redo' : '重做',
+                        onPressed: _redo.isEmpty ? null : () => _history(true),
+                        icon: const Icon(Icons.redo, size: 18),
+                      ),
+                    ],
+                  ],
+                ),
+              if (_editing) const SizedBox(height: 8),
+              if (_source)
+                TextField(
+                  key: const ValueKey('plan-source-editor'),
+                  controller: widget.controller,
+                  focusNode: _sourceFocus,
+                  minLines: 9,
+                  maxLines: null,
+                  keyboardType: TextInputType.multiline,
+                  onChanged: widget.onChanged,
+                  decoration: const InputDecoration(border: InputBorder.none),
+                )
+              else ...[
+                ..._blocks.map(_block),
+                if (_editing || widget.controller.text.trim().isEmpty)
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      textStyle: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(decoration: TextDecoration.none),
+                    ),
+                    key: const ValueKey('plan-add-paragraph'),
+                    onPressed: _append,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: Text(english ? 'Add paragraph' : '添加段落'),
                   ),
-                ),
-                key: const ValueKey('plan-editor-mode'),
-                onPressed: () {
-                  _focus.unfocus();
-                  setState(() {
-                    _source = !_source;
-                    _start = null;
-                  });
-                },
-                icon: Icon(_source ? Icons.edit_note : Icons.code, size: 18),
-                label: Text(
-                  _source
-                      ? (english ? 'Live edit' : '实时编辑')
-                      : (english ? 'Source' : '源码'),
-                ),
-              ),
-              if (!_source) ...[
-                IconButton(
-                  tooltip: english ? 'Heading' : '标题',
-                  onPressed: () => _changePrefix('## '),
-                  icon: const Icon(Icons.title, size: 18),
-                ),
-                IconButton(
-                  tooltip: english ? 'Bold' : '加粗',
-                  onPressed: () => _wrap('**'),
-                  icon: const Icon(Icons.format_bold, size: 18),
-                ),
-                IconButton(
-                  tooltip: english ? 'Italic' : '斜体',
-                  onPressed: () => _wrap('*'),
-                  icon: const Icon(Icons.format_italic, size: 18),
-                ),
-                IconButton(
-                  tooltip: english ? 'List' : '列表',
-                  onPressed: () => _changePrefix('- '),
-                  icon: const Icon(Icons.format_list_bulleted, size: 18),
-                ),
-                IconButton(
-                  tooltip: english ? 'Task' : '待办',
-                  onPressed: () => _changePrefix('- [ ] '),
-                  icon: const Icon(Icons.check_box_outlined, size: 18),
-                ),
-                IconButton(
-                  tooltip: english ? 'Paragraph' : '正文',
-                  onPressed: () => _changePrefix(''),
-                  icon: const Icon(Icons.notes, size: 18),
-                ),
-                IconButton(
-                  tooltip: english ? 'Undo' : '撤销',
-                  onPressed: _undo.isEmpty ? null : () => _history(false),
-                  icon: const Icon(Icons.undo, size: 18),
-                ),
-                IconButton(
-                  tooltip: english ? 'Redo' : '重做',
-                  onPressed: _redo.isEmpty ? null : () => _history(true),
-                  icon: const Icon(Icons.redo, size: 18),
-                ),
               ],
             ],
           ),
-          const SizedBox(height: 8),
-          if (_source)
-            TextField(
-              key: const ValueKey('plan-source-editor'),
-              controller: widget.controller,
-              minLines: 9,
-              maxLines: null,
-              keyboardType: TextInputType.multiline,
-              onChanged: widget.onChanged,
-              decoration: const InputDecoration(border: InputBorder.none),
-            )
-          else ...[
-            ..._blocks.map(_block),
-            TextButton.icon(
-              style: TextButton.styleFrom(
-                textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  decoration: TextDecoration.none,
-                ),
-              ),
-              key: const ValueKey('plan-add-paragraph'),
-              onPressed: _append,
-              icon: const Icon(Icons.add, size: 16),
-              label: Text(english ? 'Add paragraph' : '添加段落'),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
