@@ -3,9 +3,58 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spring_note/core/models/structured_work_note.dart';
+import 'package:spring_note/core/models/structured_note_section_config.dart';
 import 'package:spring_note/core/services/home_overview_service.dart';
 
 void main() {
+  test('diary sections exclude raw copies, placeholders and fenced code', () {
+    const service = HomeOverviewService();
+    final note = service.fromDailyMarkdown('''
+# 2026-10-06 日报
+## 10:00 随手记录
+### 原始记录
+修好了首页，明天上线
+### 完成事项
+- [x] **修好了首页**
+- 修好了首页
+### 问题记录
+- 暂无
+### 明日计划
+1. 上线
+```dart
+## 完成事项
+not a task
+```
+''');
+    expect(note.itemsFor(StructuredNoteSectionIds.a), ['修好了首页']);
+    expect(note.itemsFor(StructuredNoteSectionIds.b), isEmpty);
+    expect(note.itemsFor(StructuredNoteSectionIds.c), ['上线']);
+    final edited = service.fromDailyMarkdown('## 完成事项\n- 新事项');
+    expect(edited.itemsFor(StructuredNoteSectionIds.a), ['新事项']);
+    expect(service.fromDailyMarkdown('').isEmpty, isTrue);
+    expect(service.fromDailyMarkdown('# 日报\n## 完成事项\n- 暂无').isEmpty, isTrue);
+  });
+
+  test('diary supports custom headings and classifies free text', () {
+    const service = HomeOverviewService();
+    final note = service.fromDailyMarkdown(
+      '已完成开发\n问题：连接失败\n明天测试\n## 今日进展\n- 合并代码',
+      sectionConfigs: [
+        StructuredNoteSectionConfig.defaults[0].copyWith(title: '今日进展'),
+        ...StructuredNoteSectionConfig.defaults.skip(1),
+      ],
+    );
+    expect(note.itemsFor(StructuredNoteSectionIds.a), ['合并代码', '已完成开发']);
+    expect(note.itemsFor(StructuredNoteSectionIds.b), ['问题：连接失败']);
+    expect(note.itemsFor(StructuredNoteSectionIds.c), ['明天测试']);
+    final english = service.fromDailyMarkdown(
+      '## Done\n- Shipped\n## Issues\n- None\n## Next plans\n- Test',
+    );
+    expect(english.itemsFor(StructuredNoteSectionIds.a), ['Shipped']);
+    expect(english.itemsFor(StructuredNoteSectionIds.b), isEmpty);
+    expect(english.itemsFor(StructuredNoteSectionIds.c), ['Test']);
+  });
+
   test('home overview service persists daily overview json', () async {
     final temp = await Directory.systemTemp.createTemp('spring_note_overview_');
     addTearDown(() async {

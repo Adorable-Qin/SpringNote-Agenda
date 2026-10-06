@@ -2,9 +2,117 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../models/structured_work_note.dart';
+import '../models/structured_note_section_config.dart';
+import 'mock_ai_service.dart';
 
 class HomeOverviewService {
   const HomeOverviewService();
+
+  /// Derive the cards from the current diary, including edits and deletions.
+  StructuredWorkNote fromDailyMarkdown(
+    String markdown, {
+    List<StructuredNoteSectionConfig> sectionConfigs =
+        StructuredNoteSectionConfig.defaults,
+  }) {
+    final titles = <String, String>{
+      for (final section in [
+        ...StructuredNoteSectionConfig.defaults,
+        ...StructuredNoteSectionConfig.defaultsFor('en'),
+        ...sectionConfigs,
+      ])
+        section.title.toLowerCase(): section.id,
+    };
+    final items = <String, Set<String>>{
+      for (final id in StructuredNoteSectionIds.values) id: <String>{},
+    };
+    final freeText = <String>[];
+    final rawText = <String>[];
+    String? sectionId;
+    var sectionDepth = 0;
+    var inRawInput = false;
+    var hasSections = false;
+    String? fence;
+    for (final line in markdown.split('\n')) {
+      var text = line.trim();
+      final fenceMatch = RegExp(r'^(`{3,}|~{3,})').firstMatch(text);
+      if (fenceMatch != null) {
+        final marker = fenceMatch.group(1)!;
+        if (fence == null) {
+          fence = marker;
+        } else if (marker[0] == fence[0] && marker.length >= fence.length) {
+          fence = null;
+        }
+        continue;
+      }
+      if (fence != null) continue;
+      final heading = RegExp(r'^(#{1,6})\s+(.+?)\s*#*\s*$').firstMatch(text);
+      if (heading != null) {
+        final title = heading
+            .group(2)!
+            .replaceAll(RegExp(r'[*_`]+'), '')
+            .replaceFirst(RegExp(r'[:：]$'), '')
+            .trim()
+            .toLowerCase();
+        final depth = heading.group(1)!.length;
+        final matchedId = titles[title];
+        if (matchedId != null) {
+          sectionId = matchedId;
+          sectionDepth = depth;
+          inRawInput = false;
+          hasSections = true;
+        } else if (title == '原始记录' || title == 'raw input') {
+          sectionId = null;
+          sectionDepth = depth;
+          inRawInput = true;
+        } else if (depth <= sectionDepth || sectionDepth == 0) {
+          sectionId = null;
+          inRawInput = false;
+        }
+        continue;
+      }
+      text = text
+          .replaceFirst(RegExp(r'^(?:[-*+] |\d+[.)] )'), '')
+          .replaceFirst(RegExp(r'^\[[ xX]\]\s*'), '')
+          .replaceAll(RegExp(r'!\[[^\]]*\]\([^)]*\)'), '')
+          .replaceAllMapped(RegExp(r'\[([^\]]+)\]\([^)]*\)'), (m) => m[1]!)
+          .replaceAll(RegExp(r'[*`]+'), '')
+          .trim();
+      if (text.isEmpty ||
+          RegExp(r'^[-=_]+$').hasMatch(text) ||
+          const {
+            '暂无',
+            '无',
+            'none',
+            'n/a',
+            '暂无。',
+          }.contains(text.toLowerCase())) {
+        continue;
+      }
+      if (sectionId != null) {
+        items[sectionId]!.add(text);
+      } else if (inRawInput) {
+        rawText.add(text);
+      } else {
+        freeText.add(text);
+      }
+    }
+    // Quick captures store raw input alongside the corresponding sections.
+    if (!hasSections) freeText.addAll(rawText);
+    final classified = const MockAiService().structureWorkNote(
+      freeText.join('\n'),
+      sectionConfigs: sectionConfigs,
+    );
+    return StructuredWorkNote(
+      rawInput: markdown,
+      sections: [
+        for (final id in StructuredNoteSectionIds.values)
+          StructuredWorkNoteSection(
+            id: id,
+            items: {...items[id]!, ...classified.itemsFor(id)}.toList(),
+          ),
+      ],
+    );
+  }
 
   Future<StructuredWorkNote> readOverview({
     required String appDataDir,

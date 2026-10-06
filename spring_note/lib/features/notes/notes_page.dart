@@ -1241,6 +1241,7 @@ class _NotesPageState extends State<NotesPage> {
         return;
       }
       if (result.ok) {
+        widget.onNoteSaved?.call(selected);
         final stillSelected =
             _kind == kind &&
             _samePath(_selectedNote?.path ?? '', selected.path);

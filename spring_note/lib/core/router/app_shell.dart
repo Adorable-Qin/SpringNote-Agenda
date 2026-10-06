@@ -496,6 +496,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                         index: _section.index,
                         children: [
                           HomePage(
+                            externalNoteUpdate: _noteExternalUpdate,
+                            isActive: _section == AppSection.home,
                             localDataState: _localDataState,
                             updateCheckResult: _updateCheckResult,
                             updateCheckService: widget.updateCheckService,
