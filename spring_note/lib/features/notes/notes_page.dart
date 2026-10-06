@@ -2174,20 +2174,17 @@ class _NotesKindMenuButtonState extends State<_NotesKindMenuButton> {
               context,
             ).textTheme.bodyMedium?.copyWith(decoration: TextDecoration.none),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            minimumSize: const Size(0, 28),
+            minimumSize: const Size(60, 28),
+            alignment: Alignment.center,
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
           ),
           onPressed: _toggleOverlay,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(noteKindLabel(context, widget.kind)),
-              const SizedBox(width: 2),
-              Icon(_open ? Icons.expand_less : Icons.expand_more, size: 16),
-            ],
+          child: Text(
+            noteKindLabel(context, widget.kind),
+            textAlign: TextAlign.center,
           ),
         ),
       ),
