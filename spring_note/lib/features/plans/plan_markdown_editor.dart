@@ -327,7 +327,13 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
           style: _editStyle(context),
           keyboardType: TextInputType.multiline,
           decoration: const InputDecoration(
+            filled: false,
             border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+            errorBorder: InputBorder.none,
+            focusedErrorBorder: InputBorder.none,
             isDense: true,
             contentPadding: EdgeInsets.symmetric(vertical: 4),
           ),
@@ -517,7 +523,15 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
                   maxLines: null,
                   keyboardType: TextInputType.multiline,
                   onChanged: widget.onChanged,
-                  decoration: const InputDecoration(border: InputBorder.none),
+                  decoration: const InputDecoration(
+                    filled: false,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    focusedErrorBorder: InputBorder.none,
+                  ),
                 )
               else ...[
                 ..._blocks.map(_block),
