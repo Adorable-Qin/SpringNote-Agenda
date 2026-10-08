@@ -144,6 +144,41 @@ void main() {
   );
 
   for (final list in [false, true]) {
+    testWidgets('left and right cross block edges immediately (list: $list)', (
+      tester,
+    ) async {
+      final source = list ? '- [ ] abc\n- [ ] def' : 'abc\n\ndef';
+      final controller = TextEditingController(text: source);
+      var saves = 0;
+      await pumpEditor(tester, controller, (_) => saves++);
+      await tester.tap(find.byKey(const ValueKey('plan-block-0')));
+      await tester.pumpAndSettle();
+      final field = find.byKey(const ValueKey('plan-active-block'));
+      final input = tester.widget<TextField>(field).controller!;
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      expect(input.text, 'def');
+      expect(input.selection.baseOffset, 0);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      expect(input.text, 'abc');
+      expect(input.selection.baseOffset, 3);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pumpAndSettle();
+      expect(input.text, 'abc');
+      expect(input.selection.baseOffset, 2);
+      input.selection = const TextSelection.collapsed(offset: 0);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pumpAndSettle();
+      expect(input.text, 'abc');
+      expect(input.selection.baseOffset, 0);
+      expect(controller.text, source);
+      expect(saves, 0);
+      expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    });
     testWidgets(
       'arrow keys navigate adjacent blocks without editing source (list: $list)',
       (tester) async {

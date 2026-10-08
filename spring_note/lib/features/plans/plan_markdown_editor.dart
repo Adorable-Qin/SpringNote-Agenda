@@ -136,6 +136,10 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
   }
 
   KeyEventResult _handleBlockKey(FocusNode node, KeyEvent event) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+        event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      return _moveHorizontallyBetweenBlocks(event);
+    }
     if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
         event.logicalKey == LogicalKeyboardKey.arrowDown) {
       return _moveBetweenBlocks(event);
@@ -181,6 +185,46 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
     final root = _activeBlockKey.currentContext?.findRenderObject();
     if (root != null) visit(root);
     return result;
+  }
+
+  KeyEventResult _moveHorizontallyBetweenBlocks(KeyEvent event) {
+    final keyboard = HardwareKeyboard.instance;
+    final selection = _input.selection;
+    if (event is KeyUpEvent ||
+        _start == null ||
+        keyboard.isShiftPressed ||
+        keyboard.isControlPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isMetaPressed ||
+        !selection.isValid ||
+        !selection.isCollapsed ||
+        (_input.value.composing.isValid &&
+            !_input.value.composing.isCollapsed)) {
+      return KeyEventResult.ignored;
+    }
+    final left = event.logicalKey == LogicalKeyboardKey.arrowLeft;
+    if (selection.extentOffset != (left ? 0 : _input.text.length)) {
+      return KeyEventResult.ignored;
+    }
+    final blocks = _blocks;
+    final index = blocks.indexWhere((block) => block.start == _start);
+    final next = index + (left ? -1 : 1);
+    if (index < 0 || next < 0 || next >= blocks.length) {
+      return KeyEventResult.ignored;
+    }
+    final target = blocks[next];
+    _activate(
+      target,
+      position: TextPosition(offset: left ? target.body.length : 0),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _start != target.start || !_focus.hasFocus) return;
+      final render = _activeRenderEditable();
+      render?.showOnScreen(
+        rect: render.getLocalRectForCaret(_input.selection.extent),
+      );
+    });
+    return KeyEventResult.handled;
   }
 
   KeyEventResult _moveBetweenBlocks(KeyEvent event) {
