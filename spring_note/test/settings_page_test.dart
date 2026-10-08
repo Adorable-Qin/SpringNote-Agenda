@@ -41,21 +41,19 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey('notebook-editor-mode-setting')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('所见即所得').last);
+    await tester.tap(find.text('实时编辑').last);
     await tester.pumpAndSettle();
     expect(service.savedConfig.notebookEditorMode, NotebookEditorMode.live);
     expect(latest?.notebookEditorMode, NotebookEditorMode.live);
-    await tester.tap(
-      find.byKey(const ValueKey('notebook-editor-mode-setting')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('经典模式（编辑 / 分栏 / 预览）').last);
+    await tester.tap(find.text('经典模式').last);
     await tester.pumpAndSettle();
     expect(service.savedConfig.notebookEditorMode, NotebookEditorMode.classic);
+    await tester.tap(find.text('双周会'));
+    await tester.pumpAndSettle();
+    expect(service.savedConfig.workReportCycle, WorkReportCycle.biweekly);
+    await tester.tap(find.text('周会'));
+    await tester.pumpAndSettle();
+    expect(service.savedConfig.workReportCycle, WorkReportCycle.weekly);
   });
   test('app theme applies configured font and clamps font scale', () {
     final theme = AppTheme.light(appFont: 'Consolas');
