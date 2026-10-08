@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -44,6 +45,7 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
   @override
   void initState() {
     super.initState();
+    _focus.onKeyEvent = _handleBlockKey;
     widget.controller.addListener(_externalChange);
   }
 
@@ -127,6 +129,35 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
     );
     _end = _start! + replacement.length;
     _publish(next);
+  }
+
+  KeyEventResult _handleBlockKey(FocusNode node, KeyEvent event) {
+    if (event is KeyUpEvent ||
+        event.logicalKey != LogicalKeyboardKey.backspace ||
+        HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isAltPressed ||
+        HardwareKeyboard.instance.isMetaPressed ||
+        _start == null ||
+        _input.text.isNotEmpty ||
+        !_input.selection.isCollapsed ||
+        _input.selection.baseOffset != 0 ||
+        (_input.value.composing.isValid &&
+            !_input.value.composing.isCollapsed)) {
+      return KeyEventResult.ignored;
+    }
+    final source = widget.controller.text;
+    final previous = parsePlanMarkdown(source.substring(0, _start!)).lastOrNull;
+    if (previous == null) {
+      if (_prefix.isEmpty) return KeyEventResult.ignored;
+      _prefix = '';
+      _edit('');
+    } else {
+      // Remove the empty block and its preceding separator, leaving the next
+      // block's separator and all other source content intact.
+      _publish(source.replaceRange(previous.end, _end, ''));
+      _activate(previous);
+    }
+    return KeyEventResult.handled;
   }
 
   void _typed(String value) {

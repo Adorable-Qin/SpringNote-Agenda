@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spring_note/core/theme/app_theme.dart';
 import 'package:spring_note/features/plans/plan_markdown_document.dart';
@@ -141,6 +142,55 @@ void main() {
       controller.dispose();
     },
   );
+
+  for (final list in [false, true]) {
+    testWidgets(
+      'Backspace removes an emptied block and resumes previous input (list: $list)',
+      (tester) async {
+        final source = list
+            ? '- [ ] 第一项\r\n- [ ] 第二项\r\n- [ ] 第三项'
+            : '第一段\n\n第二段';
+        final controller = TextEditingController(text: source);
+        await pumpEditor(tester, controller, (_) {});
+        final start = source.indexOf(list ? '- [ ] 第二项' : '第二段');
+        await tester.tap(find.byKey(ValueKey('plan-block-$start')));
+        await tester.pumpAndSettle();
+        final field = find.byKey(const ValueKey('plan-active-block'));
+        final editable = tester.state(find.byType(EditableText));
+        tester.testTextInput.updateEditingValue(
+          const TextEditingValue(
+            text: '',
+            selection: TextSelection.collapsed(offset: 0),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final emptied = controller.text;
+        await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+        await tester.pumpAndSettle();
+        expect(controller.text, list ? '- [ ] 第一项\r\n- [ ] 第三项' : '第一段');
+        final input = tester.widget<TextField>(field);
+        expect(input.controller!.text, list ? '第一项' : '第一段');
+        expect(input.controller!.selection.baseOffset, 3);
+        expect(input.focusNode!.hasFocus, isTrue);
+        expect(tester.state(find.byType(EditableText)), same(editable));
+        tester.testTextInput.updateEditingValue(
+          TextEditingValue(
+            text: list ? '第一项继续' : '第一段继续',
+            selection: const TextSelection.collapsed(offset: 5),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(controller.text, contains('继续'));
+        await tester.tap(find.byTooltip('撤销'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('撤销'));
+        await tester.pumpAndSettle();
+        expect(controller.text, emptied);
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      },
+    );
+  }
 
   testWidgets(
     'opening and mode switches do not rewrite Markdown; heading edits replace only their range',
