@@ -106,7 +106,7 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
     setState(() {});
   }
 
-  void _activate(PlanMarkdownBlock block) {
+  void _activate(PlanMarkdownBlock block, {TextPosition? position}) {
     setState(() {
       _editing = true;
       _start = block.start;
@@ -114,7 +114,10 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
       _prefix = block.prefix;
       _input.value = TextEditingValue(
         text: block.body,
-        selection: TextSelection.collapsed(offset: block.body.length),
+        selection: TextSelection.collapsed(
+          offset: position?.offset ?? block.body.length,
+          affinity: position?.affinity ?? TextAffinity.downstream,
+        ),
       );
     });
     _focus.requestFocus();
@@ -211,26 +214,80 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
       return KeyEventResult.ignored;
     }
     final target = blocks[next];
-    _activate(target);
+    final position = _targetCaret(target, render, caret.left, up);
+    // Publish text and selection together, before the target's first paint.
+    _activate(target, position: position);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _start != target.start || !_focus.hasFocus) return;
       final destination = _activeRenderEditable();
       if (destination == null) return;
-      final line = destination.getLocalRectForCaret(
-        TextPosition(offset: up ? _input.text.length : 0),
-      );
-      final position = destination.getPositionForPoint(
-        destination.localToGlobal(Offset(caret.left, line.center.dy)),
-      );
-      _input.selection = TextSelection.collapsed(
-        offset: position.offset,
-        affinity: position.affinity,
-      );
       destination.showOnScreen(
-        rect: destination.getLocalRectForCaret(position),
+        rect: destination.getLocalRectForCaret(_input.selection.extent),
       );
     });
     return KeyEventResult.handled;
+  }
+
+  TextPosition _targetCaret(
+    PlanMarkdownBlock block,
+    RenderEditable render,
+    double x,
+    bool up,
+  ) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final direction = Directionality.of(context);
+    double markerWidth(String prefix) {
+      if (RegExp(r'^ {0,3}[-+*] \[[ xX]\] ').hasMatch(prefix)) return 30;
+      if (!RegExp(r'^ {0,3}(?:[-+*]|\d+[.)]) ').hasMatch(prefix)) return 0;
+      final marker = TextPainter(
+        text: TextSpan(
+          text: prefix.trim().contains(RegExp(r'\d')) ? prefix.trim() : '•',
+          style: DefaultTextStyle.of(context).style,
+        ),
+        textDirection: direction,
+        textScaler: scaler,
+      )..layout();
+      final width = marker.width + 10;
+      marker.dispose();
+      return width;
+    }
+
+    final style =
+        render.text?.style?.merge(_editStyle(context, prefix: block.prefix)) ??
+        _editStyle(context, prefix: block.prefix);
+    final painter =
+        TextPainter(
+          text:
+              MarkdownEditorHighlightSpanBuilder(
+                context,
+                includeBottomSpacer: false,
+              ).buildTextEditingValue(
+                TextEditingValue(text: block.body),
+                textStyle: style,
+                withComposing: false,
+              ),
+          textDirection: direction,
+          textScaler: scaler,
+          textAlign: render.textAlign,
+          textWidthBasis: render.textWidthBasis,
+          strutStyle: StrutStyle.fromTextStyle(style, forceStrutHeight: true),
+        )..layout(
+          maxWidth:
+              (render.size.width +
+                      markerWidth(_prefix) -
+                      markerWidth(block.prefix) -
+                      render.cursorWidth)
+                  .clamp(1, double.infinity),
+        );
+    final lines = painter.computeLineMetrics();
+    final line = up ? lines.lastOrNull : lines.firstOrNull;
+    final position = line == null
+        ? const TextPosition(offset: 0)
+        : painter.getPositionForOffset(
+            Offset(x, line.baseline - line.ascent / 2),
+          );
+    painter.dispose();
+    return position;
   }
 
   void _typed(String value) {
@@ -362,11 +419,14 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
     ];
   }
 
-  TextStyle _editStyle(BuildContext context) {
-    final level = RegExp(r'^ {0,3}(#{1,6}) ').firstMatch(_prefix)?[1]?.length;
+  TextStyle _editStyle(BuildContext context, {String? prefix}) {
+    final level = RegExp(
+      r'^ {0,3}(#{1,6}) ',
+    ).firstMatch(prefix ?? _prefix)?[1]?.length;
     final base = TextStyle(
       color: AppTheme.colors(context).text,
       fontSize: 14,
+      fontWeight: FontWeight.w400,
       height: 1.55,
     );
     return level == null

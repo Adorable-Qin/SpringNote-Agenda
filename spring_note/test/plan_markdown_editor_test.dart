@@ -161,6 +161,9 @@ void main() {
         await tester.pump();
         for (final expected in ['ghijkl', 'mnopqr']) {
           await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+          // Selection must already be correct before the next frame paints.
+          expect(input.text, expected);
+          expect(input.selection.baseOffset, 2);
           await tester.pumpAndSettle();
           expect(input.text, expected);
           expect(input.selection.baseOffset, 2);
