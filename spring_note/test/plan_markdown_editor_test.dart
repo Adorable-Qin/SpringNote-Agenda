@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:spring_note/core/theme/app_theme.dart';
 import 'package:spring_note/features/plans/plan_markdown_document.dart';
@@ -115,6 +116,79 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+    'reading text can be drag-selected and copied without entering edit mode',
+    (tester) async {
+      final controller = TextEditingController(text: 'Alpha beta gamma delta');
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      var saves = 0;
+      await pumpEditor(tester, controller, (_) => saves++);
+      final rect = tester.getRect(
+        find.text('Alpha beta gamma delta', findRichText: true),
+      );
+      final gesture = await tester.startGesture(
+        Offset(rect.left + 1, rect.center.dy),
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.moveTo(Offset(rect.left + 160, rect.center.dy));
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('plan-active-block')), findsNothing);
+      expect(find.byKey(const ValueKey('plan-editor-toolbar')), findsNothing);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(copied, isNotNull);
+      expect(copied, contains('Alpha'));
+      expect(saves, 0);
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    },
+  );
+
+  testWidgets(
+    'active toolbar stays at viewport top while scrolling and remains usable',
+    (tester) async {
+      final controller = TextEditingController(
+        text: List.generate(40, (i) => 'Paragraph $i').join('\n\n'),
+      );
+      await pumpEditor(tester, controller, (_) {});
+      await tester.tap(find.byKey(const ValueKey('plan-block-0')));
+      await tester.pumpAndSettle();
+      final scroll = tester.state<ScrollableState>(
+        find.byType(Scrollable).first,
+      );
+      scroll.position.jumpTo(350);
+      await tester.pumpAndSettle();
+      final toolbar = find.byKey(const ValueKey('plan-editor-toolbar'));
+      expect(toolbar, findsOneWidget);
+      expect(tester.getTopLeft(toolbar).dy, closeTo(0, 1));
+      await tester.tap(find.byTooltip('加粗'));
+      await tester.pumpAndSettle();
+      expect(controller.text, startsWith('Paragraph 0****'));
+      expect(find.byKey(const ValueKey('plan-active-block')), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      expect(toolbar, findsNothing);
+      controller.dispose();
+    },
+  );
 
   testWidgets(
     'Enter keeps the input connection for consecutive paragraphs without tapping',
