@@ -145,6 +145,38 @@ void main() {
 
   for (final list in [false, true]) {
     testWidgets(
+      'arrow keys navigate adjacent blocks without editing source (list: $list)',
+      (tester) async {
+        final source = list
+            ? '- [ ] abcdef\n- [ ] ghijkl\n- [ ] mnopqr'
+            : 'abcdef\n\nghijkl\n\nmnopqr';
+        final controller = TextEditingController(text: source);
+        var saves = 0;
+        await pumpEditor(tester, controller, (_) => saves++);
+        await tester.tap(find.byKey(const ValueKey('plan-block-0')));
+        await tester.pumpAndSettle();
+        final field = find.byKey(const ValueKey('plan-active-block'));
+        final input = tester.widget<TextField>(field).controller!;
+        input.selection = const TextSelection.collapsed(offset: 2);
+        await tester.pump();
+        for (final expected in ['ghijkl', 'mnopqr']) {
+          await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+          await tester.pumpAndSettle();
+          expect(input.text, expected);
+          expect(input.selection.baseOffset, 2);
+          expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+        }
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+        await tester.pumpAndSettle();
+        expect(input.text, 'ghijkl');
+        expect(input.selection.baseOffset, 2);
+        expect(controller.text, source);
+        expect(saves, 0);
+        await tester.pumpWidget(const SizedBox());
+        controller.dispose();
+      },
+    );
+    testWidgets(
       'Backspace removes an emptied block and resumes previous input (list: $list)',
       (tester) async {
         final source = list
@@ -191,6 +223,33 @@ void main() {
       },
     );
   }
+
+  testWidgets('Down stays within wrapped text until its last visual line', (
+    tester,
+  ) async {
+    final longText = List.filled(35, 'word').join(' ');
+    final controller = TextEditingController(
+      text: '$longText\n\nNext paragraph',
+    );
+    await pumpEditor(tester, controller, (_) {});
+    await tester.tap(find.byKey(const ValueKey('plan-block-0')));
+    await tester.pumpAndSettle();
+    final field = find.byKey(const ValueKey('plan-active-block'));
+    final input = tester.widget<TextField>(field).controller!;
+    input.selection = const TextSelection.collapsed(offset: 2);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(input.text, longText);
+    expect(input.selection.baseOffset, greaterThan(2));
+    input.selection = TextSelection.collapsed(offset: longText.length);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(input.text, 'Next paragraph');
+    await tester.pumpWidget(const SizedBox());
+    controller.dispose();
+  });
 
   testWidgets(
     'opening and mode switches do not rewrite Markdown; heading edits replace only their range',

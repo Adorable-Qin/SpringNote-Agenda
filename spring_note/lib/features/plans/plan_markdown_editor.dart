@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -132,6 +133,10 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
   }
 
   KeyEventResult _handleBlockKey(FocusNode node, KeyEvent event) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+        event.logicalKey == LogicalKeyboardKey.arrowDown) {
+      return _moveBetweenBlocks(event);
+    }
     if (event is KeyUpEvent ||
         event.logicalKey != LogicalKeyboardKey.backspace ||
         HardwareKeyboard.instance.isControlPressed ||
@@ -157,6 +162,74 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
       _publish(source.replaceRange(previous.end, _end, ''));
       _activate(previous);
     }
+    return KeyEventResult.handled;
+  }
+
+  RenderEditable? _activeRenderEditable() {
+    RenderEditable? result;
+    void visit(RenderObject object) {
+      if (object is RenderEditable) {
+        result = object;
+      } else if (result == null) {
+        object.visitChildren(visit);
+      }
+    }
+
+    final root = _activeBlockKey.currentContext?.findRenderObject();
+    if (root != null) visit(root);
+    return result;
+  }
+
+  KeyEventResult _moveBetweenBlocks(KeyEvent event) {
+    final keyboard = HardwareKeyboard.instance;
+    final selection = _input.selection;
+    if (event is KeyUpEvent ||
+        _start == null ||
+        keyboard.isShiftPressed ||
+        keyboard.isControlPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isMetaPressed ||
+        !selection.isValid ||
+        !selection.isCollapsed ||
+        (_input.value.composing.isValid &&
+            !_input.value.composing.isCollapsed)) {
+      return KeyEventResult.ignored;
+    }
+    final render = _activeRenderEditable();
+    if (render == null) return KeyEventResult.ignored;
+    final up = event.logicalKey == LogicalKeyboardKey.arrowUp;
+    final caret = render.getLocalRectForCaret(selection.extent);
+    final edge = render.getLocalRectForCaret(
+      TextPosition(offset: up ? 0 : _input.text.length),
+    );
+    // Use visual lines, including soft wrapping, rather than source newlines.
+    if ((caret.top - edge.top).abs() > 0.5) return KeyEventResult.ignored;
+    final blocks = _blocks;
+    final index = blocks.indexWhere((block) => block.start == _start);
+    final next = index + (up ? -1 : 1);
+    if (index < 0 || next < 0 || next >= blocks.length) {
+      return KeyEventResult.ignored;
+    }
+    final target = blocks[next];
+    _activate(target);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _start != target.start || !_focus.hasFocus) return;
+      final destination = _activeRenderEditable();
+      if (destination == null) return;
+      final line = destination.getLocalRectForCaret(
+        TextPosition(offset: up ? _input.text.length : 0),
+      );
+      final position = destination.getPositionForPoint(
+        destination.localToGlobal(Offset(caret.left, line.center.dy)),
+      );
+      _input.selection = TextSelection.collapsed(
+        offset: position.offset,
+        affinity: position.affinity,
+      );
+      destination.showOnScreen(
+        rect: destination.getLocalRectForCaret(position),
+      );
+    });
     return KeyEventResult.handled;
   }
 
