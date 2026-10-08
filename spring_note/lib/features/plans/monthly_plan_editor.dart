@@ -32,6 +32,7 @@ class _MonthlyPlanEditorState extends State<MonthlyPlanEditor> {
   String _summaryHeading = '';
   String _planHeading = '';
   bool _writing = false;
+  String _documentText = '';
 
   @override
   void initState() {
@@ -51,11 +52,12 @@ class _MonthlyPlanEditorState extends State<MonthlyPlanEditor> {
   }
 
   void _reload() {
-    if (!_writing) setState(_load);
+    if (!_writing && widget.controller.text != _documentText) setState(_load);
   }
 
   void _load() {
     final source = widget.controller.text;
+    _documentText = source;
     final blocks = parsePlanMarkdown(source);
     var start = 0;
     _title = '';
@@ -117,6 +119,7 @@ class _MonthlyPlanEditorState extends State<MonthlyPlanEditor> {
     content = _join(content, _planHeading);
     content = _join(content, _plan.text);
     _writing = true;
+    _documentText = content;
     widget.controller.text = content;
     _writing = false;
     widget.onChanged(content);

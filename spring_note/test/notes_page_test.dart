@@ -9,6 +9,7 @@ import 'package:spring_note/core/models/cloud_sync_config.dart';
 import 'package:spring_note/core/models/local_data_state.dart';
 import 'package:spring_note/core/models/model_config.dart';
 import 'package:spring_note/core/models/note_file.dart';
+import 'package:spring_note/core/models/note_external_update.dart';
 import 'package:spring_note/core/models/provider_config.dart';
 import 'package:spring_note/core/services/ai_client_service.dart';
 import 'package:spring_note/core/services/clipboard_image_service.dart';
@@ -22,6 +23,131 @@ import 'package:spring_note/features/notes/notes_page.dart';
 import 'package:spring_note/src/rust/cloud_sync.dart' as rust_model;
 
 void main() {
+  testWidgets('held Backspace survives delayed save notifications', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const path = 'D:\\Temp\\SpringNote\\notes\\daily\\2026-06-20.md';
+    final service = _MemoryNoteService({path: '# abcdef\n\nghijkl'});
+    final updates = ValueNotifier<NoteExternalUpdate?>(null);
+    var revision = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: NotesPage(
+          localDataState: _localDataState.copyWith(
+            config: _localDataState.config.copyWith(
+              notebookEditorMode: NotebookEditorMode.live,
+            ),
+          ),
+          noteService: service,
+          externalNoteUpdate: updates,
+          onNoteSaved: (note) => updates.value = NoteExternalUpdate(
+            kind: note.kind,
+            path: note.path,
+            revision: ++revision,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    service.readDelay = const Duration(milliseconds: 80);
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const ValueKey('notes-live-editor')),
+        matching: find.byKey(const ValueKey('plan-block-10')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final field = find.byKey(const ValueKey('plan-active-block'));
+    expect(field, findsOneWidget);
+    expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.backspace);
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(milliseconds: 30));
+      expect(tester.takeException(), isNull);
+      expect(field, findsOneWidget);
+      expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.backspace);
+    }
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.backspace);
+    await tester.pumpAndSettle();
+    expect(service.contents[path], '');
+    expect(revision, greaterThan(0));
+    await tester.pumpWidget(const SizedBox());
+    updates.dispose();
+  });
+
+  testWidgets('delayed external reload preserves newer local input', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const path = 'D:\\Temp\\SpringNote\\notes\\daily\\2026-06-20.md';
+    final service = _MemoryNoteService({path: 'original'});
+    final updates = ValueNotifier<NoteExternalUpdate?>(null);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: NotesPage(
+          localDataState: _localDataState.copyWith(
+            config: _localDataState.config.copyWith(
+              notebookEditorMode: NotebookEditorMode.live,
+            ),
+          ),
+          noteService: service,
+          externalNoteUpdate: updates,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // External changes still reload while there is no newer local edit.
+    service.contents[path] = 'external';
+    updates.value = const NoteExternalUpdate(
+      kind: NoteKind.daily,
+      path: path,
+      revision: 1,
+    );
+    await tester.pumpAndSettle();
+    final editor = find.byKey(const ValueKey('notes-live-editor'));
+    expect(
+      find.descendant(
+        of: editor,
+        matching: find.text('external', findRichText: true),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.descendant(
+        of: editor,
+        matching: find.byKey(const ValueKey('plan-block-0')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    service.readDelay = const Duration(milliseconds: 80);
+    service.contents[path] = 'older external snapshot';
+    updates.value = const NoteExternalUpdate(
+      kind: NoteKind.daily,
+      path: path,
+      revision: 2,
+    );
+    await tester.pump();
+    final field = find.byKey(const ValueKey('plan-active-block'));
+    await tester.enterText(field, 'new local input');
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(field).controller!.text, 'new local input');
+    expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+    expect(service.contents[path], 'new local input');
+    await tester.pumpWidget(const SizedBox());
+    updates.dispose();
+  });
+
   test(
     'notebook editor preference survives serialization and unrelated edits',
     () {
@@ -83,6 +209,32 @@ void main() {
         find.byKey(const ValueKey('plan-active-block')),
         '修改正文',
       );
+      await tester.pumpAndSettle();
+      expect(service.contents[path], '# 标题\n\n修改正文');
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byWidgetPredicate(
+                (widget) => widget is IconButton && widget.tooltip == '撤销',
+              ),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.tap(find.byTooltip('撤销'));
+      await tester.pumpAndSettle();
+      expect(service.contents[path], '# 标题\n\n原始正文');
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byWidgetPredicate(
+                (widget) => widget is IconButton && widget.tooltip == '重做',
+              ),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.tap(find.byTooltip('重做'));
       await tester.pumpAndSettle();
       expect(service.contents[path], '# 标题\n\n修改正文');
       await tester.pumpWidget(app(NotebookEditorMode.classic));
@@ -1784,6 +1936,7 @@ class _MemoryNoteService extends NoteService {
   _MemoryNoteService(this.contents);
 
   final Map<String, String> contents;
+  Duration readDelay = Duration.zero;
 
   @override
   Future<void> deleteMarkdown(NoteFile note) async {
@@ -1823,7 +1976,9 @@ class _MemoryNoteService extends NoteService {
 
   @override
   Future<String> readMarkdown(String path) async {
-    return contents[path] ?? '';
+    final snapshot = contents[path] ?? '';
+    if (readDelay != Duration.zero) await Future<void>.delayed(readDelay);
+    return snapshot;
   }
 
   @override

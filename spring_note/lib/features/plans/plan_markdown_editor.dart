@@ -30,6 +30,8 @@ class PlanMarkdownEditor extends StatefulWidget {
 
 class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
   final _input = _PlanBlockController();
+  final _sourceInput = TextEditingController();
+  late String _documentText;
   final _focus = FocusNode();
   final _regionFocus = FocusNode();
   final _sourceFocus = FocusNode();
@@ -47,6 +49,8 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
   @override
   void initState() {
     super.initState();
+    _documentText = widget.controller.text;
+    _sourceInput.text = _documentText;
     _focus.onKeyEvent = _handleBlockKey;
     widget.controller.addListener(_externalChange);
   }
@@ -57,6 +61,8 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_externalChange);
       widget.controller.addListener(_externalChange);
+      _documentText = widget.controller.text;
+      _sourceInput.text = _documentText;
       _start = null;
       _undo.clear();
       _redo.clear();
@@ -64,8 +70,10 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
   }
 
   void _externalChange() {
-    if (_writing || !mounted) return;
+    if (_writing || !mounted || widget.controller.text == _documentText) return;
     setState(() {
+      _documentText = widget.controller.text;
+      _sourceInput.text = _documentText;
       _start = null;
       _undo.clear();
       _redo.clear();
@@ -96,6 +104,7 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
     _regionFocus.dispose();
     _sourceFocus.dispose();
     _input.dispose();
+    _sourceInput.dispose();
     super.dispose();
   }
 
@@ -107,6 +116,8 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
       _redo.clear();
     }
     _writing = true;
+    _documentText = value;
+    if (_sourceInput.text != value) _sourceInput.text = value;
     widget.controller.text = value;
     _writing = false;
     widget.onChanged(value);
@@ -811,12 +822,12 @@ class _PlanMarkdownEditorState extends State<PlanMarkdownEditor> {
                 if (_source)
                   TextField(
                     key: const ValueKey('plan-source-editor'),
-                    controller: widget.controller,
+                    controller: _sourceInput,
                     focusNode: _sourceFocus,
                     minLines: 9,
                     maxLines: null,
                     keyboardType: TextInputType.multiline,
-                    onChanged: widget.onChanged,
+                    onChanged: _publish,
                     decoration: const InputDecoration(
                       filled: false,
                       border: InputBorder.none,
