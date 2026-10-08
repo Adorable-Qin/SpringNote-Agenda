@@ -41,6 +41,9 @@ void main() {
     expect(find.descendant(of: summary, matching: toolbar), findsOneWidget);
     await tester.tap(find.byTooltip('加粗'));
     await tester.pumpAndSettle();
+    controller.selection = const TextSelection.collapsed(offset: 0);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('plan-active-block')), findsOneWidget);
     expect(toolbar, findsOneWidget);
     // Restore before checking exact preservation of existing section content.
     await tester.tap(find.byTooltip('撤销'));
@@ -217,6 +220,61 @@ void main() {
     },
   );
 
+  testWidgets(
+    'floating undo and redo update after edits that keep the same layout',
+    (tester) async {
+      final controller = TextEditingController(text: 'alpha');
+      await pumpEditor(tester, controller, (_) {});
+      await tester.tap(find.byKey(const ValueKey('plan-block-0')));
+      await tester.pumpAndSettle();
+      IconButton button(String tooltip) => tester.widget<IconButton>(
+        find.byWidgetPredicate(
+          (widget) => widget is IconButton && widget.tooltip == tooltip,
+        ),
+      );
+      expect(button('撤销').onPressed, isNull);
+      expect(button('重做').onPressed, isNull);
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: 'bravo',
+          selection: TextSelection.collapsed(offset: 5),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(button('撤销').onPressed, isNotNull);
+      // A parent can update the document selection or refresh the same text
+      // after saving. Neither operation represents a new document.
+      controller.selection = const TextSelection.collapsed(offset: 0);
+      await tester.pumpAndSettle();
+      expect(button('撤销').onPressed, isNotNull);
+      await tester.tap(find.byTooltip('撤销'));
+      await tester.pumpAndSettle();
+      expect(controller.text, 'alpha');
+      expect(button('撤销').onPressed, isNull);
+      expect(button('重做').onPressed, isNotNull);
+      await tester.tap(find.byTooltip('重做'));
+      await tester.pumpAndSettle();
+      expect(controller.text, 'bravo');
+      expect(button('重做').onPressed, isNull);
+      expect(button('撤销').onPressed, isNotNull);
+      await tester.tap(find.byKey(const ValueKey('plan-editor-mode')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('plan-source-editor')),
+        'charlie',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('plan-editor-mode')));
+      await tester.pumpAndSettle();
+      expect(button('撤销').onPressed, isNotNull);
+      await tester.tap(find.byTooltip('撤销'));
+      await tester.pumpAndSettle();
+      expect(controller.text, 'bravo');
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    },
+  );
+
   for (final list in [false, true]) {
     testWidgets('left and right cross block edges immediately (list: $list)', (
       tester,
@@ -334,6 +392,43 @@ void main() {
         controller.dispose();
       },
     );
+  }
+
+  for (final prefix in ['', '- ', '- [ ] ', '# ']) {
+    testWidgets('held Backspace keeps editing across blocks ($prefix)', (
+      tester,
+    ) async {
+      final controller = TextEditingController(
+        text: '${prefix}abc\n\n${prefix}def',
+      );
+      await pumpEditor(tester, controller, (_) {});
+      await tester.tap(find.byKey(ValueKey('plan-block-${prefix.length + 5}')));
+      await tester.pumpAndSettle();
+      final field = find.byKey(const ValueKey('plan-active-block'));
+      final editable = tester.state(find.byType(EditableText));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.backspace);
+      for (var i = 0; i < 16; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+        expect(tester.takeException(), isNull);
+        expect(field, findsOneWidget);
+        expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+        expect(tester.state(find.byType(EditableText)), same(editable));
+        await tester.sendKeyRepeatEvent(LogicalKeyboardKey.backspace);
+      }
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.backspace);
+      await tester.pump();
+      expect(controller.text, '');
+      tester.testTextInput.updateEditingValue(
+        const TextEditingValue(
+          text: '继续输入',
+          selection: TextSelection.collapsed(offset: 4),
+        ),
+      );
+      await tester.pump();
+      expect(controller.text, '继续输入');
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    });
   }
 
   testWidgets('Down stays within wrapped text until its last visual line', (

@@ -119,6 +119,7 @@ class _NotesPageState extends State<NotesPage> {
   int _notesLoadGeneration = 0;
   int _noteSelectionGeneration = 0;
   int _saveGeneration = 0;
+  bool _notifyingSave = false;
   int _searchGeneration = 0;
   Timer? _searchDebounce;
   Timer? _calendarPromptDebounce;
@@ -324,7 +325,17 @@ class _NotesPageState extends State<NotesPage> {
         previous.monthlyNotesDirectory != current.monthlyNotesDirectory;
   }
 
+  void _notifyNoteSaved(NoteFile note) {
+    _notifyingSave = true;
+    try {
+      widget.onNoteSaved?.call(note);
+    } finally {
+      _notifyingSave = false;
+    }
+  }
+
   void _handleExternalNoteUpdate() {
+    if (_notifyingSave) return;
     final update = widget.externalNoteUpdate?.value;
     if (update == null) {
       return;
@@ -341,6 +352,7 @@ class _NotesPageState extends State<NotesPage> {
 
     final selected = _selectedNote;
     final directory = _directoryFor(_kind);
+    final saveGeneration = _saveGeneration;
     await widget.noteService.indexMarkdownFile(
       directoryPath: directory,
       kind: _kind,
@@ -351,7 +363,9 @@ class _NotesPageState extends State<NotesPage> {
       kind: _kind,
     );
 
-    if (!mounted || _kind != update.kind) return;
+    if (!mounted || _kind != update.kind || saveGeneration != _saveGeneration) {
+      return;
+    }
     if ((selected == null && notes.isNotEmpty) ||
         (selected != null &&
             !notes.any((note) => _samePath(note.path, selected.path)))) {
@@ -364,7 +378,7 @@ class _NotesPageState extends State<NotesPage> {
       selectedContent = await widget.noteService.readMarkdown(selected.path);
     }
 
-    if (!mounted || _kind != update.kind) {
+    if (!mounted || _kind != update.kind || saveGeneration != _saveGeneration) {
       return;
     }
 
@@ -514,7 +528,7 @@ class _NotesPageState extends State<NotesPage> {
       }
       _searchController.clear();
       await _loadNotes(kind: kind, selectedPath: note.path);
-      widget.onNoteSaved?.call(note);
+      _notifyNoteSaved(note);
       _noteUploadQueue.markDirty(note.path);
       _editorFocusNode.requestFocus();
     } catch (error) {
@@ -585,7 +599,7 @@ class _NotesPageState extends State<NotesPage> {
             ? null
             : _selectedNote?.path,
       );
-      widget.onNoteSaved?.call(note);
+      _notifyNoteSaved(note);
     } catch (error) {
       _deletedPaths.remove(note.path);
       if (mounted) {
@@ -884,7 +898,7 @@ class _NotesPageState extends State<NotesPage> {
       _saving = false;
       _statusText = l10n(context).notesSaved;
     });
-    widget.onNoteSaved?.call(updatedNote);
+    _notifyNoteSaved(updatedNote);
     if (_searchController.text.trim().isNotEmpty) {
       _scheduleSearch();
     }
@@ -1280,7 +1294,7 @@ class _NotesPageState extends State<NotesPage> {
         return;
       }
       if (result.ok) {
-        widget.onNoteSaved?.call(selected);
+        _notifyNoteSaved(selected);
         final stillSelected =
             _kind == kind &&
             _samePath(_selectedNote?.path ?? '', selected.path);
@@ -2859,6 +2873,7 @@ class _EditorWorkspaceState extends State<_EditorWorkspace> {
         child: AbsorbPointer(
           absorbing: !widget.enabled,
           child: PlanMarkdownEditor(
+            key: ValueKey('live-editor-${widget.editorRevision}'),
             controller: widget.controller,
             // The existing controller listener owns autosave and calendar updates.
             onChanged: (_) {},
