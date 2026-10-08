@@ -105,6 +105,8 @@ class NoteService {
   Future<NoteFile> mergeWeeklyReports({
     required String directoryPath,
     required List<NoteFile> sources,
+    required Future<String?> Function(String sourceMarkdown, String periodLabel)
+    generate,
     bool english = false,
   }) async {
     if (sources.length != 2 ||
@@ -123,18 +125,29 @@ class NoteService {
     final name = '${stems[0]}_${stems[1]}';
     final path = _join(directoryPath, '$name.md');
     final title = '$name ${english ? 'Biweekly report' : '双周报'}';
-    final sections = <String>[];
-    for (final source in sorted) {
-      final content = await readMarkdown(source.path);
-      sections.add(_nestReportHeadings(content));
-    }
     await NoteStorageCoordinator.runForManagedNotePath(path, () async {
       final file = File(path);
       if (!await file.exists()) {
+        final sections = <String>[];
+        for (final source in sorted) {
+          sections.add(
+            '## ${source.name}\n\n${await readMarkdown(source.path)}',
+          );
+        }
+        final generated = await generate(sections.join('\n\n'), name);
+        final body = (generated ?? '')
+            .trim()
+            .replaceFirst(RegExp(r'^# [^\n]*(?:\n|$)'), '')
+            .trim();
+        if (body.isEmpty) {
+          throw StateError(
+            english
+                ? 'AI could not generate the biweekly report. Check the intelligent-generation model and try again.'
+                : 'AI 未能生成双周报，请检查智能生成模型配置后重试。',
+          );
+        }
         await file.parent.create(recursive: true);
-        await file.writeAsString(
-          '# $title\n\n${sections.join('\n\n---\n\n')}\n',
-        );
+        await file.writeAsString('# $title\n\n$body\n');
       }
     });
     await indexMarkdownFile(
@@ -152,39 +165,6 @@ class NoteService {
       ),
       content: await readMarkdown(path),
     );
-  }
-
-  String _nestReportHeadings(String content) {
-    String? fence;
-    var fenceLength = 0;
-    return content
-        .split('\n')
-        .map((line) {
-          final marker = RegExp(
-            r'^ {0,3}(`{3,}|~{3,})',
-          ).firstMatch(line)?.group(1);
-          if (marker != null) {
-            if (fence == null) {
-              fence = marker[0];
-              fenceLength = marker.length;
-            } else if (marker[0] == fence &&
-                marker.length >= fenceLength &&
-                line
-                    .substring(line.indexOf(marker) + marker.length)
-                    .trim()
-                    .isEmpty) {
-              fence = null;
-            }
-            return line;
-          }
-          return fence == null
-              ? line.replaceFirstMapped(
-                  RegExp(r'^(#{1,5}) '),
-                  (match) => '#${match[1]} ',
-                )
-              : line;
-        })
-        .join('\n');
   }
 
   Future<void> writeMarkdown(String path, String content) async {

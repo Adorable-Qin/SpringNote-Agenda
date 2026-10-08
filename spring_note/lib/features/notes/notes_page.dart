@@ -463,6 +463,30 @@ class _NotesPageState extends State<NotesPage> {
           directoryPath: state.directoryFor(kind),
           sources: selected,
           english: english,
+          generate: (sourceMarkdown, periodLabel) async {
+            if (mounted) {
+              setState(
+                () => _statusText = english
+                    ? 'AI is organizing the biweekly report…'
+                    : 'AI 正在整理双周报…',
+              );
+            }
+            final result = await widget.aiClientService.generateBiweeklyReport(
+              appDataDir: state.dataDirectory,
+              config: state.config,
+              sourceMarkdown: sourceMarkdown,
+              periodLabel: periodLabel,
+            );
+            if (!mounted ||
+                state.dataDirectory != widget.localDataState.dataDirectory) {
+              throw StateError(
+                english
+                    ? 'Data directory changed; please retry.'
+                    : '数据目录已变更，请重试。',
+              );
+            }
+            return result;
+          },
         );
       } else {
         final date = await showDatePicker(
@@ -504,7 +528,12 @@ class _NotesPageState extends State<NotesPage> {
         );
       }
     } finally {
-      if (mounted) setState(() => _mutatingNotes = false);
+      if (mounted) {
+        setState(() {
+          _mutatingNotes = false;
+          _statusText = l10n(context).notesFimReady;
+        });
+      }
     }
   }
 
