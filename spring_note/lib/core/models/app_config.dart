@@ -10,6 +10,8 @@ enum AppThemePreference { system, light, dark }
 
 enum WorkReportCycle { weekly, biweekly }
 
+enum NotebookEditorMode { classic, live }
+
 const defaultDailyMergePrompt = '''你是 SpringNote-Agenda 的日报整理助手。
 你的任务是根据已有日报和新增随手记录，整理生成一篇自然、真实、便于继续编辑的日报。
 
@@ -149,6 +151,7 @@ String defaultWeeklyReportPromptFor(String language) {
 class AppConfig {
   const AppConfig({
     this.workReportCycle = WorkReportCycle.weekly,
+    this.notebookEditorMode = NotebookEditorMode.classic,
     required this.wallpaperSettings,
     required this.appFont,
     required this.fontScale,
@@ -181,6 +184,7 @@ class AppConfig {
 
   final WallpaperSettings wallpaperSettings;
   final WorkReportCycle workReportCycle;
+  final NotebookEditorMode notebookEditorMode;
 
   final String appFont;
   final double fontScale;
@@ -267,6 +271,9 @@ class AppConfig {
   factory AppConfig.fromJson(Map<String, Object?> json) {
     final language = resolveAppLanguage(_readLanguage(json['language']));
     return AppConfig(
+      notebookEditorMode: json['notebookEditorMode'] == 'live'
+          ? NotebookEditorMode.live
+          : NotebookEditorMode.classic,
       workReportCycle: json['workReportCycle'] == 'biweekly'
           ? WorkReportCycle.biweekly
           : WorkReportCycle.weekly,
@@ -343,6 +350,7 @@ class AppConfig {
   Map<String, Object?> toJson() {
     return {
       'workReportCycle': workReportCycle.name,
+      'notebookEditorMode': notebookEditorMode.name,
       'wallpaperSettings': wallpaperSettings.toJson(),
       'appFont': appFont,
       'fontScale': fontScale,
@@ -378,6 +386,7 @@ class AppConfig {
 
   AppConfig copyWith({
     WorkReportCycle? workReportCycle,
+    NotebookEditorMode? notebookEditorMode,
     WallpaperSettings? wallpaperSettings,
     String? appFont,
     double? fontScale,
@@ -412,6 +421,7 @@ class AppConfig {
         nextShowTrayIcon && (closeToTray ?? this.closeToTray);
     return AppConfig(
       workReportCycle: workReportCycle ?? this.workReportCycle,
+      notebookEditorMode: notebookEditorMode ?? this.notebookEditorMode,
       wallpaperSettings: wallpaperSettings ?? this.wallpaperSettings,
       appFont: appFont ?? this.appFont,
       fontScale: fontScale ?? this.fontScale,

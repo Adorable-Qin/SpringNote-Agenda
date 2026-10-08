@@ -88,6 +88,48 @@ class _PreferencesPanel extends StatelessWidget {
       maxWidth: 1080,
       children: [
         _SettingsCard(
+          title: currentAppLanguage(context) == 'en'
+              ? 'Notebook editor'
+              : '笔记本编辑模式',
+          children: [
+            DropdownButton<NotebookEditorMode>(
+              key: const ValueKey('notebook-editor-mode-setting'),
+              isExpanded: true,
+              value: config.notebookEditorMode,
+              items: [
+                DropdownMenuItem(
+                  value: NotebookEditorMode.classic,
+                  child: Text(
+                    currentAppLanguage(context) == 'en'
+                        ? 'Classic — Edit / Split / Preview'
+                        : '经典模式（编辑 / 分栏 / 预览）',
+                  ),
+                ),
+                DropdownMenuItem(
+                  value: NotebookEditorMode.live,
+                  child: Text(
+                    currentAppLanguage(context) == 'en'
+                        ? 'Live Markdown editing'
+                        : '所见即所得',
+                  ),
+                ),
+              ],
+              onChanged: saving
+                  ? null
+                  : (value) {
+                      if (value != null) {
+                        onChanged(config.copyWith(notebookEditorMode: value));
+                      }
+                    },
+            ),
+            Text(
+              currentAppLanguage(context) == 'en'
+                  ? 'Live mode uses the same paragraph editor as Work plans. Click content to edit it.'
+                  : '所见即所得模式与工作计划使用相同的编辑器，点击正文即可编辑。',
+            ),
+          ],
+        ),
+        _SettingsCard(
           title: currentAppLanguage(context) == 'en' ? 'Work cycle' : '工作周期',
           children: [
             ListTile(

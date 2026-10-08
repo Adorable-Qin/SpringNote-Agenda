@@ -22,6 +22,92 @@ import 'package:spring_note/features/notes/notes_page.dart';
 import 'package:spring_note/src/rust/cloud_sync.dart' as rust_model;
 
 void main() {
+  test(
+    'notebook editor preference survives serialization and unrelated edits',
+    () {
+      expect(
+        AppConfig.fromJson({}).notebookEditorMode,
+        NotebookEditorMode.classic,
+      );
+      expect(
+        AppConfig.fromJson({
+          'notebookEditorMode': 'unknown',
+        }).notebookEditorMode,
+        NotebookEditorMode.classic,
+      );
+      final config = AppConfig.defaults().copyWith(
+        notebookEditorMode: NotebookEditorMode.live,
+        notesEditorWorkspaceMode: 'preview',
+      );
+      final restored = AppConfig.fromJson(
+        config.toJson(),
+      ).copyWith(fontScale: 110);
+      expect(restored.notebookEditorMode, NotebookEditorMode.live);
+      expect(restored.notesEditorWorkspaceMode, 'preview');
+    },
+  );
+
+  testWidgets(
+    'live notebook saves edits and switches back without losing content',
+    (tester) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      const path = 'D:\\Temp\\SpringNote\\notes\\daily\\2026-06-20.md';
+      final service = _MemoryNoteService({path: '# 标题\n\n原始正文'});
+      Widget app(NotebookEditorMode mode) => MaterialApp(
+        theme: AppTheme.light(),
+        home: NotesPage(
+          localDataState: _localDataState.copyWith(
+            config: _localDataState.config.copyWith(notebookEditorMode: mode),
+          ),
+          noteService: service,
+        ),
+      );
+      await tester.pumpWidget(app(NotebookEditorMode.live));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('notes-live-editor')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('notes-workspace-mode-split')),
+        findsNothing,
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('notes-live-editor')),
+          matching: find.text('原始正文', findRichText: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('plan-active-block')),
+        '修改正文',
+      );
+      await tester.pumpAndSettle();
+      expect(service.contents[path], '# 标题\n\n修改正文');
+      await tester.pumpWidget(app(NotebookEditorMode.classic));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('notes-live-editor')), findsNothing);
+      expect(
+        find.byKey(const ValueKey('notes-workspace-mode-split')),
+        findsOneWidget,
+      );
+      expect(
+        tester.widget<TextField>(find.byType(TextField).last).controller!.text,
+        '# 标题\n\n修改正文',
+      );
+      await tester.pumpWidget(app(NotebookEditorMode.live));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey('notes-live-editor')),
+          matching: find.text('修改正文', findRichText: true),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets(
     'notebook creates explicitly and right-click deletes without recreating',
     (tester) async {

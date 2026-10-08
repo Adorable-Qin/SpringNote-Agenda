@@ -23,6 +23,7 @@ import '../../core/widgets/markdown_editor_highlight.dart';
 import '../../l10n/l10n.dart';
 import 'markdown_preview.dart';
 import 'weekly_report_picker.dart';
+import '../plans/plan_markdown_editor.dart';
 
 typedef NoteImagePicker = Future<List<NoteImageAttachment>> Function();
 
@@ -159,6 +160,11 @@ class _NotesPageState extends State<NotesPage> {
   @override
   void didUpdateWidget(covariant NotesPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.localDataState.config.notebookEditorMode !=
+        oldWidget.localDataState.config.notebookEditorMode) {
+      _editorFocusNode.unfocus();
+      _invalidateFimPrediction(scheduleNext: false);
+    }
     _editorController.markdownSyntaxHighlightEnabled =
         widget.localDataState.config.markdownSyntaxHighlightEnabled;
     if (widget.localDataState.config.notesEditorWorkspaceMode !=
@@ -1071,7 +1077,11 @@ class _NotesPageState extends State<NotesPage> {
       });
     }
 
-    if (!scheduleNext || _selectedNote == null || _loading) {
+    if (!scheduleNext ||
+        _selectedNote == null ||
+        _loading ||
+        widget.localDataState.config.notebookEditorMode ==
+            NotebookEditorMode.live) {
       return;
     }
 
@@ -1688,6 +1698,9 @@ class _NotesPageState extends State<NotesPage> {
           Expanded(
             flex: 64,
             child: _EditorWorkspace(
+              liveEditing:
+                  widget.localDataState.config.notebookEditorMode ==
+                  NotebookEditorMode.live,
               mode: _workspaceMode,
               controller: _editorController,
               editorRevision: _editorRevision,
@@ -2692,6 +2705,7 @@ class _NoteListItemState extends State<_NoteListItem> {
 
 class _EditorWorkspace extends StatefulWidget {
   const _EditorWorkspace({
+    required this.liveEditing,
     required this.mode,
     required this.controller,
     required this.editorRevision,
@@ -2710,6 +2724,7 @@ class _EditorWorkspace extends StatefulWidget {
   });
 
   final _EditorWorkspaceMode mode;
+  final bool liveEditing;
   final TextEditingController controller;
   final int editorRevision;
   final UndoHistoryController undoController;
@@ -2793,6 +2808,7 @@ class _EditorWorkspaceState extends State<_EditorWorkspace> {
       headerHeight: 42,
       headerPadding: const EdgeInsets.only(left: 24, right: 12),
       header: _EditorWorkspaceHeader(
+        liveEditing: widget.liveEditing,
         statusText: widget.statusText,
         insertImageEnabled: widget.enabled,
         onInsertImage: widget.onInsertImage,
@@ -2807,6 +2823,22 @@ class _EditorWorkspaceState extends State<_EditorWorkspace> {
   }
 
   Widget _buildBody(SpringThemeColors colors) {
+    if (widget.liveEditing) {
+      return SingleChildScrollView(
+        key: const ValueKey('notes-live-editor'),
+        padding: const EdgeInsets.fromLTRB(28, 20, 28, 56),
+        child: AbsorbPointer(
+          absorbing: !widget.enabled,
+          child: PlanMarkdownEditor(
+            controller: widget.controller,
+            // The existing controller listener owns autosave and calendar updates.
+            onChanged: (_) {},
+            imageBasePath: widget.localImageBasePath ?? '.',
+            english: currentAppLanguage(context) == 'en',
+          ),
+        ),
+      );
+    }
     final showEditor = _bodyMode != _EditorWorkspaceMode.preview;
     final showPreview = _bodyMode != _EditorWorkspaceMode.edit;
     _editorMounted = _editorMounted || showEditor;
@@ -2903,6 +2935,7 @@ class _EditorWorkspaceState extends State<_EditorWorkspace> {
 
 class _EditorWorkspaceHeader extends StatelessWidget {
   const _EditorWorkspaceHeader({
+    required this.liveEditing,
     required this.statusText,
     required this.insertImageEnabled,
     required this.onInsertImage,
@@ -2914,6 +2947,7 @@ class _EditorWorkspaceHeader extends StatelessWidget {
   });
 
   final String? statusText;
+  final bool liveEditing;
   final bool insertImageEnabled;
   final VoidCallback onInsertImage;
   final bool regenerateEnabled;
@@ -2946,7 +2980,8 @@ class _EditorWorkspaceHeader extends StatelessWidget {
           onPressed: regenerateEnabled && !regenerating ? onRegenerate : null,
         ),
         const SizedBox(width: 12),
-        _WorkspaceModeSegmentedControl(value: mode, onChanged: onModeChanged),
+        if (!liveEditing)
+          _WorkspaceModeSegmentedControl(value: mode, onChanged: onModeChanged),
       ],
     );
   }
