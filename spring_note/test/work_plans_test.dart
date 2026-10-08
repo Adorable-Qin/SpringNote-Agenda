@@ -62,16 +62,35 @@ void main() {
         );
         sources.add(note);
       }
+      await expectLater(
+        service.mergeWeeklyReports(
+          directoryPath: state.directoryFor(NoteKind.biweekly),
+          sources: sources,
+          generate: (_, _) async => null,
+        ),
+        throwsStateError,
+      );
+      expect(
+        await service.listMarkdownFiles(
+          directoryPath: state.directoryFor(NoteKind.biweekly),
+          kind: NoteKind.biweekly,
+        ),
+        isEmpty,
+      );
       final result = await service.mergeWeeklyReports(
         directoryPath: state.directoryFor(NoteKind.biweekly),
         sources: sources.reversed.toList(),
+        generate: (source, period) async {
+          expect(source, contains('22 complete'));
+          expect(source, contains('29 complete'));
+          expect(source, contains('## Progress'));
+          expect(period, '2025-W52_2026-W01');
+          return '# AI report\n\nConsolidated outcomes';
+        },
       );
       expect(result.name, '2025-W52_2026-W01.md');
       final content = await service.readMarkdown(result.path);
-      expect(content, contains('22 complete'));
-      expect(content, contains('29 complete'));
-      expect(content, contains('### Progress'));
-      expect(content, contains('```python\n# keep this comment\n```'));
+      expect(content, '# 2025-W52_2026-W01 双周报\n\nConsolidated outcomes\n');
       expect(
         await service.readMarkdown(sources.first.path),
         contains('## Progress'),
@@ -80,12 +99,15 @@ void main() {
       final repeated = await service.mergeWeeklyReports(
         directoryPath: state.directoryFor(NoteKind.biweekly),
         sources: sources,
+        generate: (_, _) async =>
+            throw StateError('Existing reports must not be regenerated'),
       );
       expect(await service.readMarkdown(repeated.path), '# Edited report');
       await expectLater(
         service.mergeWeeklyReports(
           directoryPath: state.directoryFor(NoteKind.biweekly),
           sources: [sources.first, sources.first],
+          generate: (_, _) async => null,
         ),
         throwsArgumentError,
       );
@@ -271,6 +293,8 @@ void main() {
     expect(find.text('周计划板'), findsOneWidget);
     expect(find.text('2026-10'), findsOneWidget);
     expect(find.text('2026-09'), findsOneWidget);
+    await tester.tap(find.text('Weekly task', findRichText: true).first);
+    await tester.pumpAndSettle();
     final weeklyEditor = find.byWidgetPredicate(
       (widget) =>
           widget is TextField &&

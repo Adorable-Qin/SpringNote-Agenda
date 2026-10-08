@@ -2172,11 +2172,12 @@ class _MemoryMessageView extends StatelessWidget {
             followLinkColor: true,
             useDollarSignsForLatex: true,
             latexBuilder: springMarkdownLatexBuilder,
-            components: springMarkdownComponents,
-            inlineComponents: springMarkdownInlineComponents,
-            unOrderedListBuilder: springMarkdownUnorderedListBuilder,
-            tableBuilder: springMarkdownTableBuilder,
-            // The memoir page is a single scrollable page with no note
+            checkboxBuilder: springMarkdownCheckboxBuilder,
+            hrBuilder: springMarkdownHrBuilder,
+            blockQuoteBuilder: springMarkdownBlockQuoteBuilder,
+            inlineCodeBuilder: springMarkdownInlineCodeBuilder,
+            unOrderedListBuilder:
+                springMarkdownUnorderedListBuilder, // The memoir page is a single scrollable page with no note
             // switching, so springtree blocks render without the inline
             // node cap.
             codeBuilder: (context, name, code, closed) => buildSpringCodeBlock(
@@ -2195,7 +2196,7 @@ class _MemoryMessageView extends StatelessWidget {
                 localDataState,
               ),
             ),
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+            style: TextStyle(
               color: springMarkdownTextColor(
                 context,
                 darkFallback: colors.textMuted,

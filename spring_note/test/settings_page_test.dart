@@ -21,6 +21,40 @@ import 'package:spring_note/features/settings/settings_page.dart';
 import 'package:spring_note/src/rust/ai.dart' as rust_ai;
 
 void main() {
+  testWidgets('notebook editor mode setting persists the selected editor', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final service = _MemoryLocalDataService(AppConfig.defaults());
+    AppConfig? latest;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light(),
+        home: SettingsPage(
+          localDataState: _state(AppConfig.defaults()),
+          localDataService: service,
+          onConfigChanged: (value) => latest = value,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('实时编辑').last);
+    await tester.pumpAndSettle();
+    expect(service.savedConfig.notebookEditorMode, NotebookEditorMode.live);
+    expect(latest?.notebookEditorMode, NotebookEditorMode.live);
+    await tester.tap(find.text('经典模式').last);
+    await tester.pumpAndSettle();
+    expect(service.savedConfig.notebookEditorMode, NotebookEditorMode.classic);
+    await tester.tap(find.text('双周会'));
+    await tester.pumpAndSettle();
+    expect(service.savedConfig.workReportCycle, WorkReportCycle.biweekly);
+    await tester.tap(find.text('周会'));
+    await tester.pumpAndSettle();
+    expect(service.savedConfig.workReportCycle, WorkReportCycle.weekly);
+  });
   test('app theme applies configured font and clamps font scale', () {
     final theme = AppTheme.light(appFont: 'Consolas');
 
@@ -111,7 +145,6 @@ void main() {
       await tester.pump();
       expect(find.text(section), findsWidgets);
     }
-
 
     expect(service.savedConfig.markdownSyntaxHighlightEnabled, isTrue);
     await tester.tap(_settingSwitch('Markdown 语法高亮'));

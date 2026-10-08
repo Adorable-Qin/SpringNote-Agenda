@@ -69,10 +69,11 @@ class MarkdownPreview extends StatelessWidget {
                     followLinkColor: true,
                     useDollarSignsForLatex: true,
                     latexBuilder: springMarkdownLatexBuilder,
-                    components: springMarkdownComponents,
-                    inlineComponents: springMarkdownInlineComponents,
+                    checkboxBuilder: springMarkdownCheckboxBuilder,
+                    hrBuilder: springMarkdownHrBuilder,
+                    blockQuoteBuilder: springMarkdownBlockQuoteBuilder,
+                    inlineCodeBuilder: springMarkdownInlineCodeBuilder,
                     unOrderedListBuilder: springMarkdownUnorderedListBuilder,
-                    tableBuilder: springMarkdownTableBuilder,
                     codeBuilder: buildSpringCodeBlock,
                     imageBuilder: (context, url, width, height) =>
                         SpringMarkdownImage(
@@ -81,7 +82,7 @@ class MarkdownPreview extends StatelessWidget {
                           height: height,
                           localImageBasePaths: [localImageBasePath],
                         ),
-                    style: textTheme.bodyLarge?.copyWith(
+                    style: TextStyle(
                       color: springMarkdownTextColor(context),
                       fontSize: 14,
                       height: 1.55,

@@ -88,42 +88,38 @@ class _PreferencesPanel extends StatelessWidget {
       maxWidth: 1080,
       children: [
         _SettingsCard(
-          title: currentAppLanguage(context) == 'en' ? 'Work cycle' : '工作周期',
+          title: currentAppLanguage(context) == 'en'
+              ? 'Notes and reports'
+              : '笔记与汇报',
           children: [
-            ListTile(
-              title: Text(
-                currentAppLanguage(context) == 'en'
-                    ? 'Reporting cadence'
-                    : '汇报周期',
+            IgnorePointer(
+              ignoring: saving,
+              child: _ChoiceSettingRow<NotebookEditorMode>(
+                label: currentAppLanguage(context) == 'en'
+                    ? 'Notebook editor'
+                    : '笔记本编辑模式',
+                value: config.notebookEditorMode,
+                options: NotebookEditorMode.values,
+                labels: currentAppLanguage(context) == 'en'
+                    ? ['Classic', 'Live editing']
+                    : ['经典模式', '实时编辑'],
+                onChanged: (value) =>
+                    onChanged(config.copyWith(notebookEditorMode: value)),
               ),
-              subtitle: Text(
-                currentAppLanguage(context) == 'en'
-                    ? 'Biweekly meetings enable merging two weekly reports in Notebook.'
-                    : '选择双周会后，可在笔记本中挑选两份周报合并为双周报。',
-              ),
-              trailing: DropdownButton<WorkReportCycle>(
+            ),
+            IgnorePointer(
+              ignoring: saving,
+              child: _ChoiceSettingRow<WorkReportCycle>(
+                label: currentAppLanguage(context) == 'en'
+                    ? 'Work cycle'
+                    : '工作周期',
                 value: config.workReportCycle,
-                items: [
-                  DropdownMenuItem(
-                    value: WorkReportCycle.weekly,
-                    child: Text(
-                      currentAppLanguage(context) == 'en' ? 'Weekly' : '周会',
-                    ),
-                  ),
-                  DropdownMenuItem(
-                    value: WorkReportCycle.biweekly,
-                    child: Text(
-                      currentAppLanguage(context) == 'en' ? 'Biweekly' : '双周会',
-                    ),
-                  ),
-                ],
-                onChanged: saving
-                    ? null
-                    : (value) {
-                        if (value != null) {
-                          onChanged(config.copyWith(workReportCycle: value));
-                        }
-                      },
+                options: WorkReportCycle.values,
+                labels: currentAppLanguage(context) == 'en'
+                    ? ['Weekly', 'Biweekly']
+                    : ['周会', '双周会'],
+                onChanged: (value) =>
+                    onChanged(config.copyWith(workReportCycle: value)),
               ),
             ),
           ],

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:gpt_markdown/custom_widgets/custom_divider.dart';
 import 'package:gpt_markdown/custom_widgets/indent_widget.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
-import 'package:gpt_markdown/custom_widgets/markdown_config.dart';
 import 'package:gpt_markdown/custom_widgets/unordered_ordered_list.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 
@@ -101,124 +100,112 @@ GptMarkdownThemeData springMarkdownThemeData(
         .withValues(alpha: 0.5),
     hrLinePadding: const EdgeInsets.only(bottom: 16),
     linkColor: isLight ? _githubLinkColor : base.linkColor,
+    styleSheet: base.styleSheet.copyWith(
+      table: TableStyle(
+        borderColor: isLight ? _githubBorderColor : colors.border,
+        borderWidth: 1,
+        headerTextStyle: const TextStyle(fontWeight: FontWeight.w700),
+        headerBackground: isLight
+            ? _githubTableHeaderColor
+            : colors.surfaceMuted,
+        rowStripeColor: isLight ? _githubTableHeaderColor : colors.surfaceMuted,
+        cellPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
+        columnWidth: const FlexColumnWidth(),
+        overflow: TableOverflow.wrap,
+      ),
+      blockQuote: BlockQuoteStyle(
+        textStyle: TextStyle(color: springMarkdownMutedTextColor(context)),
+      ),
+    ),
+    inlineCode: InlineCodeStyle(
+      fontSizeFactor: 0.9,
+      fontFamily: 'monospace',
+      color: springMarkdownTextColor(context),
+    ),
   );
 }
-
-final _springTaskCheckboxMd = _SpringTaskCheckboxMd();
-final _springNewLines = _SpringNewLines();
-final _springInlineCodeMd = _SpringInlineCodeMd();
-final _springHrLine = _SpringHrLine();
-final _springBlockQuote = _SpringBlockQuote();
-
-final List<MarkdownComponent> springMarkdownComponents = [
-  for (final component in MarkdownComponent.globalComponents)
-    if (component is CheckBoxMd)
-      _springTaskCheckboxMd
-    else if (component is NewLines)
-      _springNewLines
-    else if (component is HighlightedText)
-      _springInlineCodeMd
-    else if (component is HrLine)
-      _springHrLine
-    else if (component is BlockQuote)
-      _springBlockQuote
-    else
-      component,
-];
-
-final List<MarkdownComponent> springMarkdownInlineComponents = [
-  for (final component in MarkdownComponent.inlineComponents)
-    if (component is HighlightedText) _springInlineCodeMd else component,
-];
 
 Widget springMarkdownUnorderedListBuilder(
   BuildContext context,
   Widget child,
   GptMarkdownConfig config,
 ) {
-  final isTaskItem =
-      child is MdWidget && _springTaskCheckboxMd.exp.hasMatch(child.exp.trim());
   final style = config.style ?? DefaultTextStyle.of(context).style;
+  final span = child is Text
+      ? child.textSpan
+      : child is RichText
+      ? child.text
+      : null;
+  final task = span != null && _startsWithTask(span);
   return UnorderedListView(
+    scalesItsOwnText: config.blocksRenderDirectly,
     bulletColor: style.color,
     padding: 7,
-    spacing: isTaskItem ? 0 : 10,
-    bulletSize: isTaskItem ? 0 : 0.3 * (style.fontSize ?? kDefaultFontSize),
+    spacing: task ? 0 : 10,
+    bulletSize: task ? 0 : 0.3 * (style.fontSize ?? kDefaultFontSize),
     textDirection: config.textDirection,
     child: child,
   );
 }
 
-Widget springMarkdownTableBuilder(
-  BuildContext context,
-  List<CustomTableRow> tableRows,
-  TextStyle textStyle,
-  GptMarkdownConfig config,
-) {
-  final colors = AppTheme.colors(context);
-  final isLight = _isLightMarkdownTheme(context);
-  final borderColor = isLight ? _githubBorderColor : colors.border;
-  final headerColor = isLight ? _githubTableHeaderColor : colors.surfaceMuted;
-  final maxColumns = tableRows.fold<int>(
-    0,
-    (previous, row) =>
-        previous > row.fields.length ? previous : row.fields.length,
-  );
-  if (maxColumns == 0) {
-    return const SizedBox.shrink();
+bool _startsWithTask(InlineSpan span) {
+  if (span is BlockWidgetSpan) return span.bare is _SpringTaskCheckboxRow;
+  if (span is WidgetSpan) return span.child is _SpringTaskCheckboxRow;
+  if (span is TextSpan) {
+    if ((span.text ?? '').trim().isNotEmpty) return false;
+    for (final child in span.children ?? const <InlineSpan>[]) {
+      if (child.toPlainText().trim().isEmpty) continue;
+      return _startsWithTask(child);
+    }
   }
-  final tableConfig = config.copyWith(style: textStyle);
+  return false;
+}
 
-  return LayoutBuilder(
-    builder: (context, constraints) {
-      final table = Table(
-        columnWidths: {
-          for (var index = 0; index < maxColumns; index++)
-            index: const FlexColumnWidth(),
-        },
-        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-        border: TableBorder.all(width: 1, color: borderColor),
-        children: [
-          for (var rowIndex = 0; rowIndex < tableRows.length; rowIndex++)
-            TableRow(
-              decoration:
-                  tableRows[rowIndex].isHeader ||
-                      _isEvenGithubTableBodyRow(tableRows, rowIndex)
-                  ? BoxDecoration(color: headerColor)
-                  : null,
-              children: [
-                for (var index = 0; index < maxColumns; index++)
-                  _SpringTableCell(
-                    field: index < tableRows[rowIndex].fields.length
-                        ? tableRows[rowIndex].fields[index]
-                        : null,
-                    config: tableConfig,
-                    isHeader: tableRows[rowIndex].isHeader,
-                  ),
-              ],
-            ),
-        ],
-      );
-
-      if (!constraints.hasBoundedWidth) {
-        return table;
-      }
-      return SizedBox(width: constraints.maxWidth, child: table);
-    },
+Widget springMarkdownCheckboxBuilder(
+  BuildContext context,
+  bool checked,
+  Widget content,
+  CheckboxStyle style,
+) {
+  final fontSize = DefaultTextStyle.of(context).style.fontSize ?? 14;
+  return _SpringTaskCheckboxRow(
+    checked: checked,
+    textDirection: Directionality.of(context),
+    checkboxSize: fontSize * 0.8,
+    topPadding: fontSize * 0.36,
+    child: content,
   );
 }
 
-bool _isEvenGithubTableBodyRow(List<CustomTableRow> tableRows, int rowIndex) {
-  if (tableRows[rowIndex].isHeader) {
-    return false;
-  }
-  var bodyRowIndex = 0;
-  for (var index = 0; index <= rowIndex; index++) {
-    if (!tableRows[index].isHeader) {
-      bodyRowIndex++;
-    }
-  }
-  return bodyRowIndex.isEven;
+Widget springMarkdownHrBuilder(BuildContext context, HrStyle style) {
+  return CustomDivider(
+    height: 1,
+    color: _isLightMarkdownTheme(context)
+        ? _githubHeadingLineColor
+        : AppTheme.colors(context).divider,
+    padding: const EdgeInsets.symmetric(vertical: 16),
+  );
+}
+
+Widget springMarkdownBlockQuoteBuilder(
+  BuildContext context,
+  Widget content,
+  BlockQuoteStyle style,
+) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: BlockQuoteWidget(
+      color: _isLightMarkdownTheme(context)
+          ? _githubBorderColor
+          : AppTheme.colors(context).border,
+      direction: Directionality.of(context),
+      width: 4,
+      child: Padding(
+        padding: const EdgeInsetsDirectional.only(start: 8),
+        child: content,
+      ),
+    ),
+  );
 }
 
 Widget springMarkdownLatexBuilder(
@@ -498,204 +485,50 @@ class _SpringMath extends StatelessWidget {
   }
 }
 
-class _SpringTaskCheckboxMd extends CheckBoxMd {
-  @override
-  Widget build(BuildContext context, String text, GptMarkdownConfig config) {
-    final match = exp.firstMatch(text.trim());
-    final checked = match?.group(1) == 'x';
-    final content = match?.group(2) ?? '';
-    final fontSize =
-        config.style?.fontSize ??
-        DefaultTextStyle.of(context).style.fontSize ??
-        kDefaultFontSize;
-    return _SpringTaskCheckboxRow(
-      checked: checked,
-      textDirection: config.textDirection,
-      checkboxSize: fontSize * 0.8,
-      topPadding: fontSize * 0.36,
-      child: MdWidget(context, content, false, config: config),
-    );
-  }
-}
+InlineSpan springMarkdownInlineCodeBuilder(
+  BuildContext context,
+  String code,
+  TextStyle style,
+  InlineCodeStyle codeStyle,
+) {
+  final colors = AppTheme.colors(context);
+  final baseStyle = style;
+  final fontSize = baseStyle.fontSize ?? kDefaultFontSize;
+  final textColor = baseStyle.color ?? colors.text;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
 
-class _SpringNewLines extends NewLines {
-  @override
-  InlineSpan span(BuildContext context, String text, GptMarkdownConfig config) {
-    final style = config.style ?? DefaultTextStyle.of(context).style;
-    return TextSpan(
-      text: text,
-      style: TextStyle(
-        fontSize: style.fontSize ?? kDefaultFontSize,
-        height: 1.15,
-        color: style.color,
-      ),
-    );
-  }
-}
-
-class _SpringHrLine extends HrLine {
-  @override
-  Widget build(BuildContext context, String text, GptMarkdownConfig config) {
-    final colors = AppTheme.colors(context);
-    return CustomDivider(
-      height: 1,
-      color: _isLightMarkdownTheme(context)
-          ? _githubHeadingLineColor
-          : colors.divider,
-      padding: const EdgeInsets.symmetric(vertical: 16),
-    );
-  }
-}
-
-class _SpringBlockQuote extends BlockQuote {
-  @override
-  InlineSpan span(BuildContext context, String text, GptMarkdownConfig config) {
-    final match = exp.firstMatch(text);
-    final dataBuilder = StringBuffer();
-    final matchedText = match?[0] ?? '';
-    for (final line in matchedText.split('\n')) {
-      if (line.startsWith(RegExp(r'\ *>'))) {
-        var content = line.trimLeft().substring(1);
-        if (content.startsWith(' ')) {
-          content = content.substring(1);
-        }
-        dataBuilder.writeln(content);
-      } else {
-        dataBuilder.writeln(line);
-      }
-    }
-
-    final colors = AppTheme.colors(context);
-    final quoteColor = springMarkdownMutedTextColor(
-      context,
-      darkFallback: colors.textSubtle,
-    );
-    final lineColor = _isLightMarkdownTheme(context)
-        ? _githubBorderColor
-        : colors.border;
-    final baseStyle = config.style ?? DefaultTextStyle.of(context).style;
-    final quoteConfig = config.copyWith(
-      style: baseStyle.copyWith(color: quoteColor),
-    );
-    final child = TextSpan(
-      children: MarkdownComponent.generate(
-        context,
-        dataBuilder.toString().trim(),
-        quoteConfig,
-        true,
-      ),
-    );
-
-    return TextSpan(
-      children: [
-        WidgetSpan(
-          child: Directionality(
-            textDirection: config.textDirection,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: BlockQuoteWidget(
-                color: lineColor,
-                direction: config.textDirection,
-                width: 4,
-                child: Padding(
-                  padding: const EdgeInsetsDirectional.only(start: 8),
-                  child: quoteConfig.getRich(child),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SpringInlineCodeMd extends HighlightedText {
-  @override
-  InlineSpan span(BuildContext context, String text, GptMarkdownConfig config) {
-    final match = exp.firstMatch(text.trim());
-    final code = match?[1] ?? '';
-    final colors = AppTheme.colors(context);
-    final baseStyle = config.style ?? DefaultTextStyle.of(context).style;
-    final fontSize = baseStyle.fontSize ?? kDefaultFontSize;
-    final textColor = baseStyle.color ?? colors.text;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return WidgetSpan(
-      alignment: PlaceholderAlignment.middle,
-      child: Container(
-        key: const ValueKey('markdown-inline-code'),
-        padding: const EdgeInsets.symmetric(horizontal: 2),
-        decoration: BoxDecoration(
+  return WidgetSpan(
+    alignment: PlaceholderAlignment.middle,
+    child: Container(
+      key: const ValueKey('markdown-inline-code'),
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: isDark
+            ? colors.surfaceMuted.withValues(alpha: 0.45)
+            : const Color(0xFFF3F4F4),
+        border: Border.all(
           color: isDark
-              ? colors.surfaceMuted.withValues(alpha: 0.45)
-              : const Color(0xFFF3F4F4),
-          border: Border.all(
-            color: isDark
-                ? colors.border.withValues(alpha: 0.75)
-                : const Color(0xFFE7EAED),
-          ),
-          borderRadius: BorderRadius.circular(3),
+              ? colors.border.withValues(alpha: 0.75)
+              : const Color(0xFFE7EAED),
         ),
-        child: Transform.translate(
-          offset: const Offset(0, 0.5),
-          child: Text(
-            code,
-            style: baseStyle.copyWith(
-              color: textColor,
-              fontSize: fontSize * 0.9,
-              height: 1.08,
-              fontWeight: baseStyle.fontWeight,
-              fontFamily: 'monospace',
-              background: null,
-            ),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Transform.translate(
+        offset: const Offset(0, 0.5),
+        child: Text(
+          code,
+          style: baseStyle.copyWith(
+            color: textColor,
+            fontSize: fontSize,
+            height: 1.08,
+            fontWeight: baseStyle.fontWeight,
+            fontFamily: 'monospace',
+            background: null,
           ),
         ),
       ),
-    );
-  }
-}
-
-class _SpringTableCell extends StatelessWidget {
-  const _SpringTableCell({
-    required this.field,
-    required this.config,
-    required this.isHeader,
-  });
-
-  final CustomTableField? field;
-  final GptMarkdownConfig config;
-  final bool isHeader;
-
-  @override
-  Widget build(BuildContext context) {
-    final field = this.field;
-    if (field == null || field.data.trim().isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final baseStyle = config.style ?? DefaultTextStyle.of(context).style;
-    final cellConfig = isHeader
-        ? config.copyWith(
-            style: baseStyle.copyWith(fontWeight: FontWeight.w700),
-          )
-        : config;
-    Widget content = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-      child: MdWidget(context, field.data.trim(), false, config: cellConfig),
-    );
-
-    content = switch (field.alignment) {
-      TextAlign.center => Center(child: content),
-      TextAlign.right => Align(
-        alignment: Alignment.centerRight,
-        child: content,
-      ),
-      _ => Align(alignment: Alignment.centerLeft, child: content),
-    };
-
-    return content;
-  }
+    ),
+  );
 }
 
 class _SpringTaskCheckboxRow extends StatelessWidget {
