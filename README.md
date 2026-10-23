@@ -1,196 +1,74 @@
-<!-- We've seen that note-taking tools usually just store text.
-But SpringNote-Agenda treats notes as something that grows over time.
-Instead of static records, we model a living system:
-  .     *   .       .        o        .       *     .   .
-    .   .      |     .    .        .     .     *   .     .
-       --o--           SpringNote-Agenda           .      |   .
-    *    |      .   capture → organize → reflect → grow
- .    .     .     .        .        .     .   --*--   .
-      .        *      .        .     .        |     .  .
-(ASCII art depicting scattered thoughts converging into SpringNote-Agenda) -->
-
 <h1 align="center">
-  <img src="./snapshots/logo.png" width="48" alt="SpringNote-Agenda Logo" style="vertical-align: -6px;">
+  <img src="./snapshots/logo.png" width="48" alt="SpringNote-Agenda logo">
   SpringNote-Agenda
 </h1>
 
-<div align="center">
-<div>
-<img src="https://img.shields.io/badge/Flutter-3.x-d7e8e4?style=flat-square&labelColor=263a36&logo=flutter">
-<img src="https://img.shields.io/badge/Rust-2024-e8dfd8?style=flat-square&labelColor=263a36&logo=rust">
-<img src="https://img.shields.io/badge/License-AGPL--3.0-f2e8e5?style=flat-square&labelColor=5b403a">
-</div>
-<p><a href="./README.md">English</a> | <a href="./README.zh-CN.md">简体中文</a></p>
-</div>
+<p align="center"><a href="./README.md">English</a> · <a href="./README.zh-CN.md">简体中文</a></p>
 
-## Why SpringNote-Agenda
+A desktop notebook for daily records, work plans, and AI-assisted summaries. Notes are saved as local Markdown files, so you can read, edit, and back them up independently.
 
-Writing down one thing is easy — but organizing many scattered notes together takes time, and it's why many people struggle to keep a consistent journaling habit.
+## Features
 
-SpringNote-Agenda removes the organizing step: record your thoughts and daily moments anytime, and AI organizes them into daily, weekly, and monthly reports — turning scattered fragments into a complete whole automatically.
+- **Quick capture**: Record text and images from the home page and organize them into daily notes.
+- **Notebook**: Create daily, weekly, monthly, and biweekly reports. Edit Markdown, search notes, and save changes automatically.
+- **Work plans**: Keep monthly summaries and next-month plans together, with a separate weekly planning board.
+- **Project calendar**: Collect dated tasks from notes and plans, track deadlines, and mark tasks complete.
+- **AI assistance**: Generate summaries and reports, and use Memories to find and discuss past records.
+- **Desktop and data settings**: Choose a data directory, configure WebDAV sync, and customize the tray, shortcuts, themes, and fonts.
 
-With "Memories", you can also search and chat with your past notes, bringing back anything you once wrote down.
+## Get started
 
-SpringNote-Agenda aims to make recording your life easier to stick with, with the help of AI.
+1. Download the installer for your platform from [Releases](https://github.com/Adorable-Qin/SpringNote-Agenda/releases/latest).
+2. Open **Settings** and confirm your data directory. Keep this directory when updating or reinstalling to retain your notes and configuration.
+3. To use AI features, add a provider and model in Settings, then select the default models. Use the provider's current connection details and model IDs. AI configuration is optional for writing and editing ordinary notes.
+4. Capture a record on **Home**, or open **Notebook** and choose **New** to create a report for a date or period.
 
+## Notebook
 
-## Core Features
+Choose a report type, then select a note to edit. Changes save automatically. Search applies to the selected type and requires at least two characters. Right-click a note to delete it after confirmation.
 
-- **Home Dashboard**: Activity heatmap, quick input box, and today's summary card.
+Under **Settings → Preferences → Notebook editor**, choose live editing or classic mode. Classic mode includes editing, split view, and preview; AI completion requires a compatible completion model.
 
-  ![SpringNote-Agenda Home](./snapshots/index.png)
+For biweekly reporting, select **Biweekly** under **Settings → Preferences → Work cycle**, then combine two weekly reports. The original reports remain available.
 
-- **AI-Powered Generation**: Quickly jot down ideas on the home page, and AI automatically organizes them into structured content.
+## Work plans and calendar
 
-- **Note Editor**: Supports daily, weekly, and monthly notes, with Markdown editing, preview, code block highlighting, and AI completion suggestions.
+Open **Work plans** from the sidebar. Monthly cards contain a summary and a plan for the following month. The weekly board lets you select and edit a saved week. Both save automatically.
 
-  ![SpringNote-Agenda Note](./snapshots/note.png)
-
-- **Project Calendar**: Detects deadlines written in notes and displays them in a calendar with overdue, due-today, and upcoming reminders. Supported examples: `Due: 2026-08-30`, `Deadline: 2026/08/30`.
-
-- **Memories Chat**: Retrieve and organize your memories through conversation, with visible thinking process, tool call display, and Markdown rendering.
-
-  ![SpringNote-Agenda Memories](./snapshots/memories.png)
-
-- **Automatic Report Generation**: On startup, fills in missing weekly/monthly reports based on existing daily or weekly notes.
-
-- **Statistics Panel**: View records, activity, model calls, and data overviews across time ranges.
-
-  ![SpringNote-Agenda Statistics](./snapshots/setting.png)
-
-
-- **Polished Desktop Experience**: Custom Windows title bar, system tray, launch on boot, global shortcuts, and system font switching.
-
-## Quick Start
-
-### Download & Install
-
-#### Download from GitHub
-
-Go to the [Releases page](https://github.com/Adorable-Qin/SpringNote-Agenda/releases/latest) to download SpringNote-Agenda.
-
-### Step 1: Confirm the Data Directory
-
-Before first use, confirm where your data will be stored. Daily, weekly, and monthly notes, images, and related configs are all saved around this directory.
-
-![Data Directory](./snapshots/datadir.png)
-
-
-### Step 2: Configure AI
-
-We use **DeepSeek** as an example:
-
-#### ① Add a provider — set the BaseURL to https://api.deepseek.com/beta
-
->
-> The `beta` path is used here because of DeepSeek's [FIM API requirements](https://api-docs.deepseek.com/guides/fim_completion).
->
-> For other OpenAI-compatible APIs, fill in the BaseURL according to your provider's documentation.
->
-
-![Step 1](./snapshots/configone.png)
-
-#### ② Manually add the model `deepseek-v4-flash`
-
->
-> DeepSeek's `beta` endpoint does not support listing models, so the model must be added manually.
->
-
-![Step 2](./snapshots/configtwo.png)
-
-#### ③ Edit the model
-
->
-> Manually check the completion capability option.
->
-
-![Step 3](./snapshots/configthree.png)
-
-#### ④ Select the default model
-
->
-> If a model doesn't support completion, it won't appear in the completion model list.
->
-
-![Step 4](./snapshots/configfour.png)
-
-### Step 3: Create Your First Note
-
-![Home](./snapshots/index.png)
-
-
-### Step 4: View and Edit in the Notebook
-
-![Notebook](./snapshots/note.png)
-
-Click **New** in the notebook and choose a date to create a daily, weekly, or monthly note. Existing notes for that period are opened directly. Right-click a note to delete it after confirmation. Manually deleted weekly and monthly reports are excluded from automatic startup generation.
-
-Under **Settings → Preferences → Work cycle**, choose weekly or biweekly meetings. Biweekly meetings enable a **Biweekly report** type: select two weekly reports to create an editable combined report. Source reports are preserved, and merging the same pair again opens the existing result. Switching back to weekly meetings preserves saved biweekly reports.
-
-Notebook search searches the selected note type. Enter at least two characters to search.
-
-### Work plans
-
-Open **Work plans** from the sidebar. Monthly cards on the left keep each month's summary and next month's plan together. The editable weekly board on the right lets you switch between saved weeks. Each side has a **New** button and saves edits automatically.
-
-Dated tasks in plans, such as `- [ ] 2026-10-09 Finish proposal` or `- [ ] Finish proposal — Due: 2026-10-09`, appear automatically in the project calendar. Date changes, removed tasks, and completion updates are reflected in the plans and calendar.
-
-### Step 5: Use Memories
-
-![Memories](./snapshots/memories.png)
-
-In "Memories", you can directly ask questions about your saved work records.
-
-### Step 6: Manage Deadlines in the Project Calendar
-
-Write a deadline in any daily, weekly, or monthly note, for example:
+Add a date to a task to include it in **Project Calendar**:
 
 ```markdown
-- Prepare the release notes — Due: 2026-08-30
-- Submit the proposal — Deadline: 2026/09/05
+- [ ] 2026-11-06 Finish the proposal
+- [ ] Prepare release notes — Due: 2026-11-09
 ```
 
-Open **Project Calendar** from the sidebar to see overdue, due-today, and upcoming items. Completed Markdown tasks such as `- [x] ...` are ignored.
+Date changes and task completion are reflected in the calendar. Completed tasks no longer appear as pending reminders.
 
-### Keep Exploring
+## Data and AI
 
-After finishing the basics, you can continue configuring in Settings. For more usage instructions, see the [documentation](./docs).
+Notes, images, and configuration live in the selected data directory. Back up the whole directory to retain related files. WebDAV sync is optional and can be configured in Settings.
 
-## 🌍 Community
+AI features send the relevant prompts and note content to the provider you configure. Review that configuration before using AI with sensitive records.
 
-Whether you've run into an issue while using SpringNote-Agenda, or you have new ideas and suggestions, you're welcome to talk with us.
+## Development
 
-We read every piece of feedback carefully and keep improving SpringNote-Agenda to make it better.
+The application uses Flutter and a Rust backend. See the [application README](./spring_note/README.md) for setup and bridge-generation instructions. Run these commands from `spring_note/`:
 
-> [!TIP]
-> When reporting an issue, please also provide:
-> - Your current version number
-> - Steps to reproduce
-> - Whether it can be reproduced consistently
-> - Relevant screenshots or error messages
->
-> This information helps us locate the problem quickly.
+```sh
+flutter pub get
+flutter run -d windows
+flutter analyze
+flutter test
+```
 
+## Documentation and feedback
+
+- [Documentation](./docs/en/index.md)
+- [Changelog](./CHANGELOG.md)
+- [Report an issue](https://github.com/Adorable-Qin/SpringNote-Agenda/issues)
+
+Include the app version, reproduction steps, and relevant error messages when reporting a problem. Thanks to everyone who contributes fixes and feedback.
 
 ## License
 
-SpringNote-Agenda and the modifications in this repository are distributed under **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**. If you distribute a modified version or make it available for users to interact with over a network, provide the corresponding source code as required by the license. See [LICENSE](./LICENSE).
-
-## ❤️ Special Thanks
-
-Special thanks to all Contributors and community members for supporting SpringNote-Agenda ❤️
-
-<a href="https://github.com/Adorable-Qin/SpringNote-Agenda/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Adorable-Qin/SpringNote-Agenda&max=300&columns=15" />
-</a>
-
-## ⭐ Star History
-
-> [!TIP]
-> If this project has helped your life or work, or if you're following its future development, please give it a Star — that's what keeps us maintaining this open-source project <3
-
-<p align="center">
-  <img src="https://count.getloli.com/@SpringNote-Agenda?name=SpringNote-Agenda&theme=miku&padding=7&offset=0&align=center&scale=0.3&pixelated=1&darkmode=auto" alt="visitor count" />
-</p>
-
-[![Star History Chart](https://api.star-history.com/chart?repos=Adorable-Qin/SpringNote-Agenda&type=date&legend=top-left&sealed_token=p-YfymFA7ue3BAyI9sEqvOqSSlmL13MIzu5oQ8qx7kGWbIELXEr_urdk6zSpZXDgx7GQug143WFMEBy_YcagvYmSmdcKDK6ROPm1yOIgCaBT_zHBlPI1LOxCexFQYpCug1-X2jjypHvo2H2jB4zO3YJkP3GDoOzOZb64d5dLrFAIZUxtli5ktiwTroLX)](https://www.star-history.com/?repos=Adorable-Qin%2FSpringNote-Agenda&type=date&legend=top-left)
+The project's original code and modifications are licensed under **AGPL-3.0-only**; see [LICENSE](./LICENSE). Third-party components retain their own copyright and license terms.

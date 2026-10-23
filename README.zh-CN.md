@@ -1,198 +1,74 @@
-<!-- We've seen that note-taking tools usually just store text.
-But SpringNote-Agenda treats notes as something that grows over time.
-Instead of static records, we model a living system:
-  .     *   .       .        o        .       *     .   .
-    .   .      |     .    .        .     .     *   .     .
-       --o--           SpringNote-Agenda           .      |   .
-    *    |      .   capture → organize → reflect → grow
- .    .     .     .        .        .     .   --*--   .
-      .        *      .        .     .        |     .  .
-(ASCII art depicting scattered thoughts converging into SpringNote-Agenda) -->
-
 <h1 align="center">
-  <img src="./snapshots/logo.png" width="48" alt="SpringNote-Agenda Logo" style="vertical-align: -6px;">
+  <img src="./snapshots/logo.png" width="48" alt="SpringNote-Agenda 标志">
   SpringNote-Agenda
 </h1>
 
-<div align="center">
-<div>
-<img src="https://img.shields.io/badge/Flutter-3.x-d7e8e4?style=flat-square&labelColor=263a36&logo=flutter">
-<img src="https://img.shields.io/badge/Rust-2024-e8dfd8?style=flat-square&labelColor=263a36&logo=rust">
-<img src="https://img.shields.io/badge/License-AGPL--3.0-f2e8e5?style=flat-square&labelColor=5b403a">
-</div>
-<p><a href="./README.md">English</a> | <a href="./README.zh-CN.md">简体中文</a></p>
-</div>
+<p align="center"><a href="./README.md">English</a> · <a href="./README.zh-CN.md">简体中文</a></p>
 
-## 为什么选择SpringNote-Agenda
+用于日常记录、工作计划和 AI 辅助总结的桌面笔记本。笔记保存为本地 Markdown 文件，方便直接阅读、编辑和备份。
 
-记录一件事很简单，但把多条记录整理到一起很花时间，也让很多人难以坚持用文字记录下自己。
+## 功能
 
-SpringNote-Agenda 想省掉整理这一步：你可以随时记录想法和日常，AI 会帮你把这些内容整理成日报、周报和月报，让零散的记录自动汇总成一份完整的内容。
+- **快速记录**：在首页记录文字和图片，整理到当天日报。
+- **笔记本**：创建日报、周报、月报和双周报，编辑 Markdown、搜索笔记，修改自动保存。
+- **工作计划**：按月保存工作总结和下月计划，通过独立的周计划板安排每周工作。
+- **项目日历**：汇总笔记与计划中的日期事项，查看截止日期、标记任务完成。
+- **AI 辅助**：生成总结和汇报，通过回忆书检索、讨论过去的记录。
+- **桌面与数据设置**：选择数据目录，配置 WebDAV 同步，调整托盘、快捷键、主题和字体。
 
-通过「回忆书」，你还可以对过去的记录进行搜索和对话，随时找回曾经记下的信息。
+## 开始使用
 
-SpringNote-Agenda 希望通过 AI 让记录这件事更容易长期坚持。
+1. 从 [Releases](https://github.com/Adorable-Qin/SpringNote-Agenda/releases/latest) 下载对应平台的安装包。
+2. 打开**设置**，确认数据保存目录。更新或重装时保留此目录，即可继续使用原有笔记和配置。
+3. 如需使用 AI，在设置中添加供应商和模型，再选择默认模型。服务地址与模型 ID 以供应商当前提供的信息为准。普通记录和笔记编辑可以直接使用。
+4. 在**首页**写下第一条记录，或进入**笔记本**，点击**新建**，按日期或周期创建汇报。
 
+## 笔记本
 
-## 核心功能
+选择汇报类型，再选择一篇笔记进行编辑，修改会自动保存。搜索范围是当前类型，至少输入两个字符。右键点击笔记可在确认后删除。
 
-- **首页工作台**：活跃热力图、快速输入框和今日摘要卡片。
+在**设置 → 偏好设置 → 笔记本编辑模式**中选择实时编辑或经典模式。经典模式提供编辑、分栏和预览；AI 补全需要配置兼容的补全模型。
 
-  ![SpringNote-Agenda 首页](./snapshots/index.png)
+需要双周汇报时，在**设置 → 偏好设置 → 工作周期**中选择“双周会”，再选择两份周报进行合并。来源周报会保留。
 
-- **AI 智能生成**：在首页快速输入想法，由 AI 自动整理为结构化内容。
+## 工作计划与日历
 
-- **便签编辑**：支持日报、周报、月报等记录类型，提供 Markdown 编辑、预览、代码块高亮和 AI 补全预测。
+从侧栏打开**工作计划**。月度卡片包含本月总结和下月计划，周计划板可以选择并编辑历史周，两侧修改均自动保存。
 
-  ![SpringNote-Agenda 便签](./snapshots/note.png)
-
-- **项目日历**：自动识别笔记中的截止日期，并在日历中显示逾期、今日到期和即将到期提醒。支持示例：`截止日期：2026-08-30`、`到期：2026/08/30`。
-
-- **回忆书对话**：以对话方式检索和整理记忆内容，支持思考过程、工具调用展示与 Markdown 渲染。
-
-  ![SpringNote-Agenda 回忆书](./snapshots/memories.png)
-
-- **自动报告生成**：启动时可按日期补齐缺失的周报/月报，基于已有日报或周报生成总结。
-
-- **统计面板**：查看记录、活跃度、模型调用和时间范围内的数据概览。
-
-  ![SpringNote-Agenda 统计面板](./snapshots/setting.png)
-
-
-- **桌面端极致体验**：支持自定义 Windows 标题栏、托盘、开机自启动、全局快捷键和系统字体切换。
-
-## 快速开始
-
-### 下载安装
-
-#### 通过 GitHub 下载
-
-请前往 [Release 页](https://github.com/Adorable-Qin/SpringNote-Agenda/releases/latest) 下载SpringNote-Agenda
-
-### 第一步：确认数据位置
-
-首次使用时先确认数据保存目录。日报、周报、月报、图片和相关配置都会围绕这个目录保存；
-
-![数据目录](./snapshots/datadir.png)
-
-
-### 第二步：配置 AI
-
-
-以 **DeepSeek** 为例进行配置说明：
-
-#### ① 添加供应商 BaseURL请填写 https://api.deepseek.com/beta
-
-
->
-> 此处填写`beta`原因是Deepseek的[FIM接口要求](https://api-docs.deepseek.com/zh-cn/guides/fim_completion)
->
->其他的OpenAI兼容接口请依据实际情况填写
->
-
-![第一步](./snapshots/configone.png)
-
-#### ② 手动添加模型 deepseek-v4-flash
-
->
->因为Deepseek的`beta`接口不支持模型列表查询，所以需要手动添加模型
->
-
-![第二步](./snapshots/configtwo.png)
-
-#### ③ 编辑模型
-
->
->请手动勾选补全类型
->
-
-![第三步](./snapshots/configthree.png)
-
-#### ④ 选择默认模型
-
->
->如果你的模型不支持补全类型，则在编辑补全模型列表中不会出现该模型
->
-
-![第四步](./snapshots/configfour.png)
-
-### 第三步：完成第一次记录
-
-![首页](./snapshots/index.png)
-
-
-### 第四步：在笔记本中查看和编辑
-
-![笔记本](./snapshots/note.png)
-
-点击笔记本栏中的“新建”，选择日期即可创建日报、周报或月报；同一日期或周期已有笔记时会直接打开。右键点击列表中的笔记可删除，删除前会再次确认。主动删除的周报、月报不会在下次启动时自动补回。
-
-在“设置 → 偏好设置 → 工作周期”中选择“周会”或“双周会”。选择双周会后，笔记类型菜单会出现“双周报”，点击“合并两周周报”，勾选两份周报即可生成可编辑的双周报。来源周报保持完整；重复选择同一组合会打开已有双周报。切回周会只隐藏入口，已保存的双周报仍会保留。
-
-笔记本搜索只搜索当前选择的笔记类型。搜索至少输入两个字符，点击结果后可以打开对应的完整正文。
-
-### 工作计划
-
-侧栏的“工作计划”中，左侧按月份展示所有月度计划卡片，每张卡片包含“本月度工作总结”和“下月度工作计划”；右侧为可编辑的周计划板，可选择历史周。两侧分别提供“新建”按钮，修改自动保存。
-
-周计划和月度计划中的日期事项会自动进入项目日历，例如 `- [ ] 2026-10-09 完成方案` 或 `- [ ] 截止：2026-10-09 完成方案`。修改日期、删除事项或在日历中勾选完成，都会反映到保存的计划与日历中。
-
-### 第五步：使用回忆书
-
-![回忆书](./snapshots/memories.png)
-
-进入“回忆书”后，可以直接询问已经保存的工作记录。
-
-### 第六步：使用项目日历管理截止日期
-
-在任意日报、周报或月报中写入截止日期，例如：
+在任务中写入日期，即可纳入**项目日历**：
 
 ```markdown
-- 准备发布说明 —— 截止日期：2026-08-30
-- 提交项目方案 —— 到期：2026/09/05
+- [ ] 2026-11-06 完成方案
+- [ ] 准备发布说明 —— 截止日期：2026-11-09
 ```
 
-从侧边栏打开**项目日历**，即可查看逾期、今日到期和即将到期事项。已经勾选完成的 Markdown 任务（如 `- [x] ...`）不会生成提醒。
+修改日期或任务完成状态后，日历会同步反映变化。已完成的任务不再作为待办提醒显示。
 
-### 继续探索
+## 数据与 AI
 
-完成基本记录后，可以在设置中继续配置。更多使用说明请查看 [文档](./docs)
+笔记、图片和配置保存在所选数据目录中。备份时建议保留整个目录，以便一起恢复关联文件。WebDAV 同步可按需在设置中配置。
 
-## 🌍 社区
+AI 功能会将相关提示词和笔记内容发送到你配置的供应商。处理敏感记录前，请确认所使用的服务与配置。
 
-无论你是在使用过程中遇到问题，还是有新的想法与建议，都欢迎与我们交流。
+## 开发
 
-我们会认真聆听每一条反馈，持续优化 SpringNote-Agenda，让它变得更好。
+应用使用 Flutter 和 Rust 后端，环境配置与桥接代码生成说明见[应用 README](./spring_note/README.md)。在 `spring_note/` 目录执行：
 
->[!TIP]
->反馈问题时，请同时提供：
->- 当前版本号
->- 操作步骤
->- 是否能够稳定复现
->- 相关截图或错误信息
->
->这些信息可以帮助快速定位问题。
+```sh
+flutter pub get
+flutter run -d windows
+flutter analyze
+flutter test
+```
 
+## 文档与反馈
+
+- [使用文档](./docs/index.md)
+- [更新记录](./CHANGELOG.md)
+- [反馈问题](https://github.com/Adorable-Qin/SpringNote-Agenda/issues)
+
+反馈问题时请提供应用版本、复现步骤和相关错误信息。感谢所有贡献修复和反馈的使用者。
 
 ## 许可证
 
-SpringNote-Agenda 及本仓库中的修改均以 **GNU Affero General Public License v3.0 only（AGPL-3.0-only）** 发布。分发修改版本，或通过网络向用户提供交互服务时，应按许可证要求提供对应源代码。详见 [LICENSE](./LICENSE)。
-
-## ❤️ Special Thanks
-
-特别感谢所有 Contributors和社区成员对 SpringNote-Agenda 的支持 ❤️
-
-<a href="https://github.com/Adorable-Qin/SpringNote-Agenda/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=Adorable-Qin/SpringNote-Agenda&max=300&columns=15" />
-</a>
-
-## ⭐ Star History
-
-> [!TIP]
-> 如果本项目对您的生活 / 工作产生了帮助，或者您关注本项目的未来发展，请给项目 Star，这是我们维护这个开源项目的动力 <3
-
-<p align="center">
-  <img src="https://count.getloli.com/@SpringNote-Agenda?name=SpringNote-Agenda&theme=miku&padding=7&offset=0&align=center&scale=0.3&pixelated=1&darkmode=auto" alt="visitor count" />
-</p>
-
-[![Star History Chart](https://api.star-history.com/chart?repos=Adorable-Qin/SpringNote-Agenda&type=date&legend=top-left&sealed_token=p-YfymFA7ue3BAyI9sEqvOqSSlmL13MIzu5oQ8qx7kGWbIELXEr_urdk6zSpZXDgx7GQug143WFMEBy_YcagvYmSmdcKDK6ROPm1yOIgCaBT_zHBlPI1LOxCexFQYpCug1-X2jjypHvo2H2jB4zO3YJkP3GDoOzOZb64d5dLrFAIZUxtli5ktiwTroLX)](https://www.star-history.com/?repos=Adorable-Qin%2FSpringNote-Agenda&type=date&legend=top-left)
+项目原创代码及修改采用 **AGPL-3.0-only**，详见 [LICENSE](./LICENSE)。第三方组件保留各自的版权与许可条款。
