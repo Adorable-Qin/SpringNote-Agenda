@@ -1,0 +1,8 @@
+spring_note/editor/runtime/* text eol=lf
+spring_note/editor/scripts/*.mjs text eol=lf
+tools/typora-lab/*.mjs text eol=lf
+# Preserve checksum-pinned upstream bytes; review generated changes via manifest.
+spring_note/editor/vendor/typora-engine/* -text -whitespace
+spring_note/editor/vendor/typora-engine/frame.js -diff
+spring_note/assets/typora_editor/* -text -diff -whitespace
+spring_note/assets/typora_editor/manifest.json -text diff whitespace

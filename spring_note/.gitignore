@@ -32,6 +32,10 @@ migrate_working_dir/
 .pub/
 /build/
 /coverage/
+/editor/node_modules/
+/editor/test-results/
+/editor/dist-core/
+/assets/open_typora/
 
 # Rust build output
 /rust/target/

@@ -23,6 +23,8 @@ add_executable(${BINARY_NAME} WIN32
 # Apply the standard set of build settings. This can be removed for applications
 # that need different build settings.
 apply_standard_settings(${BINARY_NAME})
+target_compile_definitions(${BINARY_NAME} PRIVATE
+  "$<$<BOOL:${SPRINGNOTE_TEST_INSTANCE}>:SPRINGNOTE_TEST_INSTANCE>")
 
 # Add preprocessor definitions for the build version.
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION=\"${FLUTTER_VERSION}\"")

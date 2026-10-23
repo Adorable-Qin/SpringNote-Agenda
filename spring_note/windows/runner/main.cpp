@@ -7,10 +7,24 @@
 
 namespace {
 
-constexpr wchar_t kSingleInstanceMutexName[] =
-    L"Local\\AdorableQin.SpringNoteAgenda.SingleInstance";
+bool IsTyporaLab() {
+  return GetEnvironmentVariableW(L"SPRINGNOTE_TYPORA_LAB_DIR", nullptr, 0) > 1;
+}
+
+const wchar_t* const kSingleInstanceMutexName =
+#ifdef SPRINGNOTE_TEST_INSTANCE
+    L"Local\\AdorableQin.SpringNoteAgenda.EditorIntegrationTest";
+#else
+    IsTyporaLab() ? L"Local\\AdorableQin.SpringNoteAgenda.TyporaLab"
+                  : L"Local\\AdorableQin.SpringNoteAgenda.SingleInstance";
+#endif
 constexpr wchar_t kMainWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
-constexpr wchar_t kMainWindowTitle[] = L"SpringNote-Agenda";
+const wchar_t* const kMainWindowTitle =
+#ifdef SPRINGNOTE_TEST_INSTANCE
+    L"SpringNote Editor Test";
+#else
+    IsTyporaLab() ? L"SpringNote Typora Lab" : L"SpringNote-Agenda";
+#endif
 
 void RegisterRestartManagerRelaunch() {
   // Inno Setup uses Windows Restart Manager to close and relaunch apps during
@@ -67,7 +81,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 792);
-  if (!window.Create(L"SpringNote-Agenda", origin, size)) {
+  if (!window.Create(kMainWindowTitle, origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

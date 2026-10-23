@@ -627,6 +627,8 @@ class _NotesPageState extends State<NotesPage> {
     bool focusEditor = false,
   }) async {
     final generation = ++_noteSelectionGeneration;
+    await PlanMarkdownEditor.flush(_editorController);
+    if (!mounted || generation != _noteSelectionGeneration) return;
     _saveGeneration++;
     setState(() {
       _selectedNote = note;
@@ -2867,19 +2869,17 @@ class _EditorWorkspaceState extends State<_EditorWorkspace> {
 
   Widget _buildBody(SpringThemeColors colors) {
     if (widget.liveEditing) {
-      return SingleChildScrollView(
+      return SizedBox.expand(
         key: const ValueKey('notes-live-editor'),
-        padding: const EdgeInsets.fromLTRB(28, 20, 28, 56),
-        child: AbsorbPointer(
-          absorbing: !widget.enabled,
-          child: PlanMarkdownEditor(
-            key: ValueKey('live-editor-${widget.editorRevision}'),
-            controller: widget.controller,
-            // The existing controller listener owns autosave and calendar updates.
-            onChanged: (_) {},
-            imageBasePath: widget.localImageBasePath ?? '.',
-            english: currentAppLanguage(context) == 'en',
-          ),
+        child: PlanMarkdownEditor(
+          documentId: widget.editorRevision,
+          expand: true,
+          readOnly: !widget.enabled,
+          controller: widget.controller,
+          // The existing controller listener owns autosave and calendar updates.
+          onChanged: (_) {},
+          imageBasePath: widget.localImageBasePath ?? '.',
+          english: currentAppLanguage(context) == 'en',
         ),
       );
     }

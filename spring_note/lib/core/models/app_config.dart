@@ -151,7 +151,7 @@ String defaultWeeklyReportPromptFor(String language) {
 class AppConfig {
   const AppConfig({
     this.workReportCycle = WorkReportCycle.weekly,
-    this.notebookEditorMode = NotebookEditorMode.classic,
+    this.notebookEditorMode = NotebookEditorMode.live,
     required this.wallpaperSettings,
     required this.appFont,
     required this.fontScale,
@@ -271,9 +271,9 @@ class AppConfig {
   factory AppConfig.fromJson(Map<String, Object?> json) {
     final language = resolveAppLanguage(_readLanguage(json['language']));
     return AppConfig(
-      notebookEditorMode: json['notebookEditorMode'] == 'live'
-          ? NotebookEditorMode.live
-          : NotebookEditorMode.classic,
+      notebookEditorMode: json['notebookEditorMode'] == 'classic'
+          ? NotebookEditorMode.classic
+          : NotebookEditorMode.live,
       workReportCycle: json['workReportCycle'] == 'biweekly'
           ? WorkReportCycle.biweekly
           : WorkReportCycle.weekly,

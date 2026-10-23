@@ -1,0 +1,10 @@
+{
+  "version": "1.7.6",
+  "rendererSha256": "3a1a1294d840ac7d5fff820426ec272b3cce80ab025c0d925a737775a9ba59ae",
+  "entry": "springnote",
+  "adaptations": [
+    "Expose module loader",
+    "Expose original SourceView position mapper"
+  ],
+  "editorAlgorithmsChanged": false
+}

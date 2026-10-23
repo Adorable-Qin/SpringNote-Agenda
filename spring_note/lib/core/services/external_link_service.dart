@@ -11,7 +11,10 @@ class ExternalLinkService {
 
     try {
       if (Platform.isWindows) {
-        await Process.start('cmd', ['/c', 'start', '', url], runInShell: false);
+        await Process.start('rundll32.exe', [
+          'url.dll,FileProtocolHandler',
+          url,
+        ], runInShell: false);
         return true;
       }
       if (Platform.isMacOS) {

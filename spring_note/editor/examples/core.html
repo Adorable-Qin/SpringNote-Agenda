@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SpringNote Markdown 编辑核心</title>
+  <link rel="stylesheet" href="./live-markdown.css">
+  <style>
+    body { margin: 0; display: block; background: #f4f6f5; color: #243831; font-family: system-ui, sans-serif; }
+    main { max-width: 960px; margin: 32px auto; padding: 0 20px; }
+    h1 { font-size: 22px; } nav { display: flex; gap: 8px; margin: 16px 0; }
+    button { padding: 8px 16px; cursor: pointer; background: white; border: 1px solid #b8c9c0; border-radius: 6px; }
+    #editor { height: 400px; border: 1px solid #b8c9c0; border-radius: 10px; background: white; }
+    #source { white-space: pre-wrap; padding: 16px; border-radius: 10px; background: #e6ece8; }
+  </style>
+</head>
+<body><main>
+  <h1>SpringNote Markdown 编辑核心</h1>
+  <p>在正文中直接输入 Markdown。下方同步显示源文本。</p>
+  <nav><button id="bold">加粗</button><button id="undo">撤销</button><button id="redo">重做</button></nav>
+  <div id="editor"></div>
+  <pre id="source"></pre>
+</main>
+<script type="module">
+  import { createLiveMarkdownEditor } from './live-markdown.js';
+  const source = document.querySelector('#source');
+  const editor = createLiveMarkdownEditor(document.querySelector('#editor'), {
+    markdown: '# 实时 Markdown\n\n从这里开始编辑，支持 **加粗**、*斜体* 和 `代码`。\n\n- [ ] 验证中文输入\n- [x] 查看源文本\n\n| 功能 | 状态 |\n| --- | --- |\n| 实时编辑 | 可用 |',
+    onChange: value => { source.textContent = value.markdown; },
+  });
+  source.textContent = editor.snapshot().markdown;
+  for (const button of document.querySelectorAll('button')) button.onmousedown = event => event.preventDefault();
+  document.querySelector('#bold').onclick = () => editor.wrap('**');
+  document.querySelector('#undo').onclick = () => editor.undo();
+  document.querySelector('#redo').onclick = () => editor.redo();
+  window.editor = editor;
+</script>
+</body></html>

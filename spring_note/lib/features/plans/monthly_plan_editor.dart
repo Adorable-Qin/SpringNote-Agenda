@@ -33,6 +33,7 @@ class _MonthlyPlanEditorState extends State<MonthlyPlanEditor> {
   String _planHeading = '';
   bool _writing = false;
   String _documentText = '';
+  final _storedSections = <TextEditingController, String>{};
 
   @override
   void initState() {
@@ -55,7 +56,7 @@ class _MonthlyPlanEditorState extends State<MonthlyPlanEditor> {
     if (!_writing && widget.controller.text != _documentText) setState(_load);
   }
 
-  void _load() {
+  void _load({bool syncSections = true}) {
     final source = widget.controller.text;
     _documentText = source;
     final blocks = parsePlanMarkdown(source);
@@ -76,15 +77,15 @@ class _MonthlyPlanEditorState extends State<MonthlyPlanEditor> {
         .toList();
     _summaryHeading = '## 本月度工作总结\n\n';
     _planHeading = '## 下月度工作计划\n\n';
-    _intro.text = '';
-    _summary.text = '';
-    _plan.text = '';
+    var intro = '', summary = '', plan = '';
     if (headings.isEmpty) {
       // Older free-form plans remain fully editable as the summary.
-      _summary.text = source.substring(start);
+      _syncSection(_intro, intro, syncSections);
+      _syncSection(_summary, source.substring(start), syncSections);
+      _syncSection(_plan, plan, syncSections);
       return;
     }
-    _intro.text = source.substring(start, headings.first.start);
+    intro = source.substring(start, headings.first.start);
     for (var i = 0; i < headings.length; i++) {
       final heading = headings[i];
       final end = i + 1 < headings.length
@@ -92,19 +93,53 @@ class _MonthlyPlanEditorState extends State<MonthlyPlanEditor> {
           : source.length;
       final isSummary =
           heading.source.contains('总结') || heading.source.contains('summary');
-      final target = isSummary ? _summary : _plan;
+      var target = isSummary ? summary : plan;
       // Preserve repeated sections as editable content instead of dropping them.
-      if (target.text.isNotEmpty) {
-        target.text += source.substring(heading.start, end);
+      if (target.isNotEmpty) {
+        target += source.substring(heading.start, end);
       } else {
         if (isSummary) {
           _summaryHeading = heading.source;
         } else {
           _planHeading = heading.source;
         }
-        target.text = source.substring(heading.end, end);
+        target = source.substring(heading.end, end);
+      }
+      if (isSummary) {
+        summary = target;
+      } else {
+        plan = target;
       }
     }
+    _syncSection(_intro, intro, syncSections);
+    _syncSection(_summary, summary, syncSections);
+    _syncSection(_plan, plan, syncSections);
+  }
+
+  void _syncSection(TextEditingController controller, String text, bool sync) {
+    // Joining sections can add Markdown boundary blank lines. Compare against
+    // the last stored section, so those separators are not echoed into a live
+    // editor when an unrelated section changes later.
+    if (sync && _storedSections[controller] != text) {
+      _updateSection(controller, text);
+    }
+    _storedSections[controller] = text;
+  }
+
+  void _updateSection(TextEditingController controller, String text) {
+    // A calendar update in one section must not reset a sibling editor's caret,
+    // composition or history. Notify a section only when its own text changed.
+    if (controller.text == text) return;
+    final selection = controller.selection;
+    controller.value = TextEditingValue(
+      text: text,
+      selection: selection.isValid
+          ? TextSelection(
+              baseOffset: selection.baseOffset.clamp(0, text.length),
+              extentOffset: selection.extentOffset.clamp(0, text.length),
+            )
+          : const TextSelection.collapsed(offset: 0),
+    );
   }
 
   String _join(String left, String right) {
@@ -121,6 +156,7 @@ class _MonthlyPlanEditorState extends State<MonthlyPlanEditor> {
     _writing = true;
     _documentText = content;
     widget.controller.text = content;
+    _load(syncSections: false);
     _writing = false;
     widget.onChanged(content);
   }

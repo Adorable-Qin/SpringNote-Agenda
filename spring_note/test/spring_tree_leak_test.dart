@@ -30,7 +30,9 @@ final _localDataState = LocalDataState(
   dailyNotesDirectory: 'D:\\Temp\\SpringNote\\notes\\daily',
   weeklyNotesDirectory: 'D:\\Temp\\SpringNote\\notes\\weekly',
   monthlyNotesDirectory: 'D:\\Temp\\SpringNote\\notes\\monthly',
-  config: AppConfig.defaults(),
+  config: AppConfig.defaults().copyWith(
+    notebookEditorMode: NotebookEditorMode.classic,
+  ),
 );
 
 class _MemoryNoteService extends NoteService {

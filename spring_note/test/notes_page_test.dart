@@ -1,3 +1,5 @@
+import 'package:spring_note/core/editor/open_typora_editor.dart';
+import 'helpers/open_typora_surface.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -23,7 +25,15 @@ import 'package:spring_note/features/notes/notes_page.dart';
 import 'package:spring_note/src/rust/cloud_sync.dart' as rust_model;
 
 void main() {
-  testWidgets('held Backspace survives delayed save notifications', (
+  setUp(() {
+    OpenTyporaEditor.debugSurfaceBuilder = (_, session) =>
+        TestEditorSurface(session: session);
+  });
+  tearDown(() {
+    OpenTyporaEditor.debugSurfaceBuilder = null;
+  });
+
+  testWidgets('continuous browser changes survive delayed save notifications', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 900);
@@ -55,25 +65,21 @@ void main() {
     );
     await tester.pumpAndSettle();
     service.readDelay = const Duration(milliseconds: 80);
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(const ValueKey('notes-live-editor')),
-        matching: find.byKey(const ValueKey('plan-block-10')),
-      ),
-    );
-    await tester.pumpAndSettle();
-    final field = find.byKey(const ValueKey('plan-active-block'));
-    expect(field, findsOneWidget);
-    expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.backspace);
-    for (var i = 0; i < 20; i++) {
+    final session = tester
+        .widget<TestEditorSurface>(find.byType(TestEditorSurface))
+        .session;
+    final original = session.controller.text;
+    for (var length = original.length - 1; length >= 0; length--) {
+      sendEditorChange(session, original.substring(0, length));
       await tester.pump(const Duration(milliseconds: 30));
-      expect(tester.takeException(), isNull);
-      expect(field, findsOneWidget);
-      expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
-      await tester.sendKeyRepeatEvent(LogicalKeyboardKey.backspace);
+      expect(
+        tester
+            .widget<TestEditorSurface>(find.byType(TestEditorSurface))
+            .session,
+        same(session),
+      );
+      expect(session.revision, 0);
     }
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.backspace);
     await tester.pumpAndSettle();
     expect(service.contents[path], '');
     expect(revision, greaterThan(0));
@@ -81,7 +87,7 @@ void main() {
     updates.dispose();
   });
 
-  testWidgets('delayed external reload preserves newer local input', (
+  testWidgets('delayed external reload preserves newer browser input', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 900);
@@ -106,7 +112,6 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    // External changes still reload while there is no newer local edit.
     service.contents[path] = 'external';
     updates.value = const NoteExternalUpdate(
       kind: NoteKind.daily,
@@ -114,21 +119,13 @@ void main() {
       revision: 1,
     );
     await tester.pumpAndSettle();
-    final editor = find.byKey(const ValueKey('notes-live-editor'));
     expect(
       find.descendant(
-        of: editor,
-        matching: find.text('external', findRichText: true),
+        of: find.byType(TestEditorSurface),
+        matching: find.text('external'),
       ),
       findsOneWidget,
     );
-    await tester.tap(
-      find.descendant(
-        of: editor,
-        matching: find.byKey(const ValueKey('plan-block-0')),
-      ),
-    );
-    await tester.pumpAndSettle();
     service.readDelay = const Duration(milliseconds: 80);
     service.contents[path] = 'older external snapshot';
     updates.value = const NoteExternalUpdate(
@@ -137,44 +134,41 @@ void main() {
       revision: 2,
     );
     await tester.pump();
-    final field = find.byKey(const ValueKey('plan-active-block'));
-    await tester.enterText(field, 'new local input');
+    final session = tester
+        .widget<TestEditorSurface>(find.byType(TestEditorSurface))
+        .session;
+    sendEditorChange(session, 'new local input');
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pumpAndSettle();
-    expect(tester.widget<TextField>(field).controller!.text, 'new local input');
-    expect(tester.widget<TextField>(field).focusNode!.hasFocus, isTrue);
+    expect(session.controller.text, 'new local input');
     expect(service.contents[path], 'new local input');
     await tester.pumpWidget(const SizedBox());
     updates.dispose();
   });
 
-  test(
-    'notebook editor preference survives serialization and unrelated edits',
-    () {
-      expect(
-        AppConfig.fromJson({}).notebookEditorMode,
-        NotebookEditorMode.classic,
-      );
-      expect(
-        AppConfig.fromJson({
-          'notebookEditorMode': 'unknown',
-        }).notebookEditorMode,
-        NotebookEditorMode.classic,
-      );
-      final config = AppConfig.defaults().copyWith(
-        notebookEditorMode: NotebookEditorMode.live,
-        notesEditorWorkspaceMode: 'preview',
-      );
-      final restored = AppConfig.fromJson(
-        config.toJson(),
-      ).copyWith(fontScale: 110);
-      expect(restored.notebookEditorMode, NotebookEditorMode.live);
-      expect(restored.notesEditorWorkspaceMode, 'preview');
-    },
-  );
+  test('notebook preference survives serialization and unrelated edits', () {
+    expect(
+      AppConfig.fromJson({}).notebookEditorMode,
+      NotebookEditorMode.live,
+    );
+    expect(
+      AppConfig.fromJson({'notebookEditorMode': 'unknown'}).notebookEditorMode,
+      NotebookEditorMode.live,
+    );
+    expect(AppConfig.fromJson({'notebookEditorMode': 'classic'}).notebookEditorMode, NotebookEditorMode.classic);
+    final config = AppConfig.defaults().copyWith(
+      notebookEditorMode: NotebookEditorMode.live,
+      notesEditorWorkspaceMode: 'preview',
+    );
+    final restored = AppConfig.fromJson(
+      config.toJson(),
+    ).copyWith(fontScale: 110);
+    expect(restored.notebookEditorMode, NotebookEditorMode.live);
+    expect(restored.notesEditorWorkspaceMode, 'preview');
+  });
 
   testWidgets(
-    'live notebook saves edits and switches back without losing content',
+    'embedded editor saves and switches to classic without losing content',
     (tester) async {
       tester.view.physicalSize = const Size(1440, 900);
       tester.view.devicePixelRatio = 1;
@@ -193,57 +187,15 @@ void main() {
       );
       await tester.pumpWidget(app(NotebookEditorMode.live));
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('notes-live-editor')), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('notes-workspace-mode-split')),
-        findsNothing,
-      );
-      await tester.tap(
-        find.descendant(
-          of: find.byKey(const ValueKey('notes-live-editor')),
-          matching: find.text('原始正文', findRichText: true),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const ValueKey('plan-active-block')),
-        '修改正文',
-      );
-      await tester.pumpAndSettle();
-      expect(service.contents[path], '# 标题\n\n修改正文');
-      expect(
-        tester
-            .widget<IconButton>(
-              find.byWidgetPredicate(
-                (widget) => widget is IconButton && widget.tooltip == '撤销',
-              ),
-            )
-            .onPressed,
-        isNotNull,
-      );
-      await tester.tap(find.byTooltip('撤销'));
-      await tester.pumpAndSettle();
-      expect(service.contents[path], '# 标题\n\n原始正文');
-      expect(
-        tester
-            .widget<IconButton>(
-              find.byWidgetPredicate(
-                (widget) => widget is IconButton && widget.tooltip == '重做',
-              ),
-            )
-            .onPressed,
-        isNotNull,
-      );
-      await tester.tap(find.byTooltip('重做'));
+      final session = tester
+          .widget<TestEditorSurface>(find.byType(TestEditorSurface))
+          .session;
+      sendEditorChange(session, '# 标题\n\n修改正文');
       await tester.pumpAndSettle();
       expect(service.contents[path], '# 标题\n\n修改正文');
       await tester.pumpWidget(app(NotebookEditorMode.classic));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey('notes-live-editor')), findsNothing);
-      expect(
-        find.byKey(const ValueKey('notes-workspace-mode-split')),
-        findsOneWidget,
-      );
       expect(
         tester.widget<TextField>(find.byType(TextField).last).controller!.text,
         '# 标题\n\n修改正文',
@@ -251,13 +203,15 @@ void main() {
       await tester.pumpWidget(app(NotebookEditorMode.live));
       await tester.pumpAndSettle();
       expect(
-        find.descendant(
-          of: find.byKey(const ValueKey('notes-live-editor')),
-          matching: find.text('修改正文', findRichText: true),
-        ),
-        findsOneWidget,
+        tester
+            .widget<TestEditorSurface>(find.byType(TestEditorSurface))
+            .session
+            .controller
+            .text,
+        '# 标题\n\n修改正文',
       );
       expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
     },
   );
   testWidgets(
@@ -520,7 +474,7 @@ final value = 1;
     final noteService = _MemoryNoteService({
       'D:\\Temp\\SpringNote\\notes\\daily\\2026-06-18.md': '# 日报\n',
     });
-    final localDataService = _MemoryLocalDataService(AppConfig.defaults());
+    final localDataService = _MemoryLocalDataService(AppConfig.defaults().copyWith(notebookEditorMode: NotebookEditorMode.classic));
     AppConfig? changedConfig;
 
     await tester.pumpWidget(
@@ -1857,7 +1811,7 @@ final _localDataState = LocalDataState(
   dailyNotesDirectory: 'D:\\Temp\\SpringNote\\notes\\daily',
   weeklyNotesDirectory: 'D:\\Temp\\SpringNote\\notes\\weekly',
   monthlyNotesDirectory: 'D:\\Temp\\SpringNote\\notes\\monthly',
-  config: AppConfig.defaults().copyWith(language: 'zh'),
+  config: AppConfig.defaults().copyWith(language: 'zh', notebookEditorMode: NotebookEditorMode.classic),
 );
 
 final _cloudSyncLocalDataState = _localDataState.copyWith(
@@ -1895,6 +1849,7 @@ final _fimLocalDataState = LocalDataState(
   weeklyNotesDirectory: 'D:\\Temp\\SpringNote\\notes\\weekly',
   monthlyNotesDirectory: 'D:\\Temp\\SpringNote\\notes\\monthly',
   config: AppConfig.defaults().copyWith(
+    notebookEditorMode: NotebookEditorMode.classic,
     providers: const [
       ProviderConfig(
         id: 'openai-compatible',

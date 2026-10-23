@@ -1,3 +1,5 @@
+import 'package:spring_note/core/editor/open_typora_editor.dart';
+import 'helpers/open_typora_surface.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -22,6 +24,13 @@ LocalDataState stateFor(String root) => LocalDataState(
 );
 
 void main() {
+  setUp(() {
+    OpenTyporaEditor.debugSurfaceBuilder = (_, session) =>
+        TestEditorSurface(session: session);
+  });
+  tearDown(() {
+    OpenTyporaEditor.debugSurfaceBuilder = null;
+  });
   test(
     'work cycle defaults and survives config round trip and unrelated changes',
     () {
@@ -292,21 +301,25 @@ void main() {
     expect(find.text('月度计划'), findsOneWidget);
     expect(find.text('周计划板'), findsOneWidget);
     expect(find.text('2026-10'), findsOneWidget);
-    expect(find.text('2026-09'), findsOneWidget);
-    await tester.tap(find.text('Weekly task', findRichText: true).first);
-    await tester.pumpAndSettle();
-    final weeklyEditor = find.byWidgetPredicate(
-      (widget) =>
-          widget is TextField &&
-          widget.controller!.text.contains('Weekly task'),
+    await tester.scrollUntilVisible(
+      find.text('2026-09'),
+      400,
+      scrollable: find.byType(Scrollable).first,
     );
-    await tester.enterText(weeklyEditor, '# Week\n- 2026-10-12 Edited task');
+    expect(find.text('2026-09'), findsOneWidget);
+    final weekly = tester
+        .widgetList<TestEditorSurface>(find.byType(TestEditorSurface))
+        .firstWhere(
+          (surface) => surface.session.controller.text.contains('Weekly task'),
+        );
+    sendEditorChange(weekly.session, '# Week\n- 2026-10-12 Edited task');
     await tester.pumpAndSettle();
     expect(service.saved, contains('Edited task'));
     expect(tester.takeException(), isNull);
     tester.view.physicalSize = const Size(700, 1000);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
   });
 }
 
